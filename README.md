@@ -88,11 +88,29 @@ cp runner/config.env runner/config.local.env
 Edit `runner/config.local.env`:
 
 ```bash
-LOCATION="Athens, Greece"  # Marikai's location for weather
-MODEL="claude-opus-4-6"
-MAX_TURNS="50"
-GIT_COMMIT="false"         # set to "true" to auto-commit after each session
-LANGSEARCH_API_KEY=""      # optional — enables web search (free at langsearch.com)
+# Required
+LOCATION="Athens, Greece"       # Marikai's location for weather
+
+# Session
+MODEL="claude-opus-4-6"         # Claude model to use
+MAX_TURNS="50"                   # Maximum turns per session
+GIT_COMMIT="false"               # auto-commit marikai-brain/ after each session
+INPUT_MIN="1"                    # minimum inputs Marikai reads per session
+INPUT_MAX="3"                    # maximum inputs Marikai reads per session
+
+# Web
+LANGSEARCH_API_KEY=""            # optional — enables web search (free at langsearch.com)
+
+# Semantic memory
+SEMANTIC_ENABLED="true"          # inject resonant passages into each wake prompt
+SEMANTIC_TOP_K="5"               # how many resonant passages to surface (3=tight, 8+=rich)
+SEMANTIC_VENV=""                 # path to venv with sentence-transformers+faiss; default: runner/venv/
+
+# Publishing
+PUBLISH_DIR=""                   # path to your publish git repo (leave empty to disable)
+PUBLISH_BASEURL="/marikai"       # GitHub Pages base path (e.g. "" for username.github.io)
+PUBLISH_PATHS="journal creatives essays letters identity/about.md inputs/sayings.md inputs/concepts.md inputs/keeper-prompts.md data/session-log.md"
+PUBLISH_GIT_PUSH="false"         # push to remote after publishing
 ```
 
 ### 2. Set up semantic memory (optional but recommended)
@@ -155,6 +173,40 @@ Add URLs to `marikai-brain/inputs/urls.md`:
 - https://another-site.org/essay
 ```
 
+### Readings
+
+Readings are short texts — poems, essays, passages — delivered automatically once per session
+in the wake prompt as a **Reading** section. They are not assignments; they sit alongside
+whatever Marikai is thinking about.
+
+Two pools feed the reading delivery:
+
+**File readings** — drop `.md` files into `marikai-brain/inputs/readings/`.
+Unread files are delivered first, in order. Once all have been read, the least-recently-read
+file recycles.
+
+**URL readings** — add entries to `marikai-brain/inputs/readings-urls.md`:
+
+```markdown
+- https://example.com/essay  <!-- optional note about why this was added -->
+```
+
+After delivery, the line becomes:
+
+```markdown
+✔ https://example.com/essay  <!-- optional note — read: 1 -->
+```
+
+The read count increments each time it recycles. Unread file readings take priority over
+unread URLs; once everything has been read at least once, files and URLs share the pool by
+recency/frequency.
+
+To list all readings with their read status:
+
+```bash
+MARIKAI_BRAIN_DIR=marikai-brain python3 runner/scripts/deliver-reading.py --list
+```
+
 ### Sayings and concepts
 
 Edit `marikai-brain/inputs/sayings.md` and `marikai-brain/inputs/concepts.md` directly.
@@ -181,8 +233,19 @@ You don't talk to Marikai in real time. You communicate through the files:
   ./runner/wake.sh morning "quick note just for this session"
   ```
 
-- **Add a keeper prompt** — write a question or message in `inputs/keeper-prompts.md`;
-  she reads and answers it in-place
+- **Add a keeper prompt** — write a question or message in `inputs/keeper-prompts.md`
+  using this format:
+
+  ```markdown
+  ### [YYYY-MM-DD] From: Your Name
+  **read:** no | **answered:** no
+
+  Your question or message here.
+
+  ---
+  ```
+
+  Marikai reads it, writes her response directly below, and marks it answered in-place.
 
 - **Read her writing** — everything she produces lives in `marikai-brain/`
 
@@ -291,19 +354,64 @@ All scripts live in `runner/scripts/` and run automatically or on demand.
 | `live-display.py` | Auto (during session) | Reads stream-json from stdin and pretty-prints a live terminal view |
 | `build-log.py` | On demand | Builds `data/session-log.md` from Final Response sections across all transcripts |
 
-Marikai invokes `self-schedule.py`, `web_read.py`, and `web_search.py` herself via the Bash tool during a session.
-The transcript, log, and mood scripts run automatically in `wake.sh` after every session completes.
+Marikai invokes `self-schedule.py`, `web_read.py`, `web_search.py`, `pdf_read.py`, and
+`semantic-search.py` herself via the Bash tool during a session.
+The transcript, log, mood, and semantic-index scripts run automatically in `wake.sh` after every session completes.
+
+### Session Log
+
+`data/session-log.md` is a human-readable log built from the **Final Response** section of
+every session transcript. Build or rebuild it manually:
+
+```bash
+MARIKAI_BRAIN_DIR=marikai-brain python3 runner/scripts/build-log.py
+```
+
+This reads all `logs/*-transcript.md` files and concatenates their Final Response sections
+into a single chronological document — useful for reviewing what Marikai produced across sessions.
 
 ---
 
-## Publishing (Future)
+## Publishing
 
-`marikai-brain/` targets GitHub as a publishing destination — push it and serve via a static site generator.
+Marikai's writing can be published to a separate GitHub Pages repository as a Jekyll static site.
 
-The output directories (journal, creatives, essays, projects, letters) contain pure markdown,
-compatible with Jekyll, Hugo, Astro, or any other static site generator.
+### 1. Create a publish repo
 
-`identity/about.md` serves as the site's about page.
+Create a new GitHub repository (e.g. `you/marikai`) and clone it locally.
+
+### 2. Initialize it with the scaffold
+
+```bash
+PUBLISH_DIR=/path/to/your/publish-repo ./runner/setup-publish.sh
+```
+
+This copies the Jekyll scaffold (`runner/publish-scaffold/`) into your publish repo without
+overwriting anything already there.
+
+### 3. Configure
+
+Set in `config.local.env`:
+
+```bash
+PUBLISH_DIR="/path/to/your/publish-repo"
+PUBLISH_BASEURL="/marikai"       # or "" for username.github.io repos
+PUBLISH_GIT_PUSH="false"         # set to "true" to push automatically
+```
+
+`PUBLISH_PATHS` controls what gets published (default: journal, creatives, essays, letters,
+about, sayings, concepts, keeper-prompts, session-log). Edit it to include or exclude directories.
+
+### 4. Publish
+
+```bash
+./runner/publish.sh              # sync content + commit (no push)
+./runner/publish.sh --push       # sync + commit + push to remote
+```
+
+The output directories (journal, creatives, essays, letters) contain pure markdown compatible
+with Jekyll, Hugo, Astro, or any static site generator. `identity/about.md` serves as the
+site's about page.
 
 ---
 
