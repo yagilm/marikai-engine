@@ -15,15 +15,18 @@ marikAI/
 │   ├── MARIKAI.md              # Her identity and session guide
 │   ├── identity/
 │   │   ├── identity.md         # Core identity anchor (keeper maintains this)
-│   │   └── about.md            # Self-description (Marikai updates this)
+│   │   ├── about.md            # Self-description (Marikai updates this)
+│   │   └── voice.md            # Her writing voice and style (Marikai updates this)
 │   ├── memory/
 │   │   └── memory.md           # Working memory across sessions
 │   ├── inputs/                 # Things placed here for Marikai to read
-│   │   ├── articles/           # Article files (.md, .txt)
+│   │   ├── articles/           # Article files (.md, .txt, .pdf)
 │   │   ├── books/              # Book parts: bookname-part-01.txt, -part-02.txt, …
+│   │   ├── readings/           # Keeper-curated reading passages (.md)
 │   │   ├── note.md             # Short notes (- unread, ✔ read)
 │   │   ├── keeper-prompts.md   # Questions and messages from the keeper
 │   │   ├── urls.md             # URLs to visit (one per line)
+│   │   ├── readings-urls.md    # Curated reading URLs with descriptions
 │   │   ├── sayings.md          # Sayings with times_read tracking
 │   │   └── concepts.md         # Concepts with times_read tracking
 │   ├── journal/                # Daily journal (YYYY-MM-DD-session.md)
@@ -36,9 +39,11 @@ marikAI/
 │   │   └── prompt.md           # Message from last session to next
 │   └── data/
 │       ├── read-tracker.json        # Tracks articles, book parts, URLs read
+│       ├── readings-tracker.json    # Tracks readings/ passages and readings-urls.md
 │       ├── mood-state.json          # Mood state carried between sessions
 │       ├── mood-history.jsonl       # Full mood history across all sessions
 │       ├── self-schedule.json       # Pending self-scheduled session (if any)
+│       ├── session-log.md           # Human-readable log built from transcript Final Responses
 │       ├── last-session-stream.jsonl  # Raw stream output of last session
 │       └── semantic-index/          # Vector index for semantic memory search
 │           ├── index.faiss          # FAISS index of all writing embeddings
@@ -49,6 +54,10 @@ marikAI/
 │   ├── config.env              # Config template
 │   ├── config.local.env        # Your actual config (gitignored)
 │   ├── setup-cron.sh           # Installs cron schedule + poller
+│   ├── setup-publish.sh        # Initializes the publish repo with Jekyll scaffold
+│   ├── publish.sh              # Syncs marikai-brain content to publish repo
+│   ├── reset.sh                # Archives session state and restores blank slate
+│   ├── publish-scaffold/       # Jekyll site scaffold (index, journal, essays, etc.)
 │   ├── venv/                   # Python venv for semantic search (gitignored)
 │   └── scripts/
 │       ├── process-transcript.sh   # stream-json → readable markdown transcript
@@ -277,6 +286,10 @@ All scripts live in `runner/scripts/` and run automatically or on demand.
 | `web_search.py` | On demand (Marikai) | Searches the web via LangSearch API; requires `LANGSEARCH_API_KEY` |
 | `semantic-index.py` | Auto (post-session) | Incrementally embeds new writing into the FAISS vector index |
 | `semantic-search.py` | Auto (pre-session) | Queries the index with the last prompt; injects resonant passages into wake |
+| `deliver-reading.py` | Auto (pre-session) | Picks a reading for the session from `inputs/readings/` or `readings-urls.md` |
+| `pdf_read.py` | On demand (Marikai) | Extracts readable text from a PDF file or URL |
+| `live-display.py` | Auto (during session) | Reads stream-json from stdin and pretty-prints a live terminal view |
+| `build-log.py` | On demand | Builds `data/session-log.md` from Final Response sections across all transcripts |
 
 Marikai invokes `self-schedule.py`, `web_read.py`, and `web_search.py` herself via the Bash tool during a session.
 The transcript, log, and mood scripts run automatically in `wake.sh` after every session completes.
