@@ -39,13 +39,17 @@ marikAI/
 │       ├── mood-state.json          # Mood state carried between sessions
 │       ├── mood-history.jsonl       # Full mood history across all sessions
 │       ├── self-schedule.json       # Pending self-scheduled session (if any)
-│       └── last-session-stream.jsonl  # Raw stream output of last session
+│       ├── last-session-stream.jsonl  # Raw stream output of last session
+│       └── semantic-index/          # Vector index for semantic memory search
+│           ├── index.faiss          # FAISS index of all writing embeddings
+│           └── chunks.json          # Chunk metadata (source, date, type, text)
 │
 ├── runner/
 │   ├── wake.sh                 # Main session runner
 │   ├── config.env              # Config template
 │   ├── config.local.env        # Your actual config (gitignored)
 │   ├── setup-cron.sh           # Installs cron schedule + poller
+│   ├── venv/                   # Python venv for semantic search (gitignored)
 │   └── scripts/
 │       ├── process-transcript.sh   # stream-json → readable markdown transcript
 │       ├── extract-log-entry.py    # stream-json → structured JSON log line
@@ -54,7 +58,9 @@ marikAI/
 │       ├── web_read.py             # Fetch + extract clean text from a URL
 │       ├── web_search.py           # Web search via LangSearch API
 │       ├── mood-capture.py         # Capture mood state after each session
-│       └── mood-lexicon.json       # 126-word valence/arousal lexicon
+│       ├── mood-lexicon.json       # 126-word valence/arousal lexicon
+│       ├── semantic-index.py       # Build/update the FAISS semantic index
+│       └── semantic-search.py      # Query the index; returns resonant passages
 │
 ├── marikai_needs.md            # Feature tracking: ported scripts + future capabilities
 └── README.md
@@ -80,7 +86,24 @@ GIT_COMMIT="false"         # set to "true" to auto-commit after each session
 LANGSEARCH_API_KEY=""      # optional — enables web search (free at langsearch.com)
 ```
 
-### 2. Run a session
+### 2. Set up semantic memory (optional but recommended)
+
+Semantic memory surfaces passages from Marikai's past writing that resonate with
+where she left off — injected into every wake prompt as **Resonant Passages**.
+
+```bash
+python3 -m venv runner/venv
+runner/venv/bin/pip install sentence-transformers faiss-cpu
+```
+
+That's it. The index builds automatically after the first session that produces writing.
+To build it manually (e.g. if there's already content in `marikai-brain/`):
+
+```bash
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-index.py
+```
+
+### 3. Run a session
 
 ```bash
 ./runner/wake.sh                 # auto-detect session type from current time
@@ -90,7 +113,7 @@ LANGSEARCH_API_KEY=""      # optional — enables web search (free at langsearch
 
 Session types: `morning`, `afternoon`, `evening`, `night`
 
-### 3. Schedule with cron (optional)
+### 4. Schedule with cron (optional)
 
 ```bash
 ./runner/setup-cron.sh install   # 07:00, 13:00, 19:00, 23:00 daily
@@ -203,6 +226,42 @@ State persists in `data/mood-state.json`; full history accumulates in `data/mood
 
 ---
 
+## Semantic Memory
+
+Every session, the five passages from Marikai's past writing most thematically resonant
+with her last prompt are surfaced in the wake prompt under **Resonant Passages**.
+This connects sessions across time — not by recency, but by meaning.
+
+**How it works:**
+
+1. After each session, `semantic-index.py` incrementally embeds new writing
+   (journal, essays, creatives, letters) using `all-MiniLM-L6-v2` and stores vectors in FAISS.
+2. At the next wake, `semantic-search.py` embeds `prompt/prompt.md` and retrieves the
+   top 5 most similar chunks from the index.
+3. Results appear in the wake prompt before Marikai begins writing.
+
+**Manual commands:**
+
+```bash
+# Build or update the index
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-index.py
+
+# Show index stats
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-index.py --stats
+
+# Search manually
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-search.py "time and memory"
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-search.py --top 10 "solitude"
+
+# Rebuild from scratch (if index gets corrupted or you want a fresh start)
+MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-index.py --rebuild
+```
+
+If `runner/venv/` doesn't exist or the packages aren't installed, the feature
+silently does nothing — it won't break wake sessions.
+
+---
+
 ## Runner Scripts
 
 All scripts live in `runner/scripts/` and run automatically or on demand.
@@ -216,6 +275,8 @@ All scripts live in `runner/scripts/` and run automatically or on demand.
 | `check-self-schedule.sh` | Cron (every 10 min) | Fires `wake.sh` when a self-scheduled time arrives |
 | `web_read.py` | On demand (Marikai) | Fetches a URL and extracts clean readable text; HTTPS only |
 | `web_search.py` | On demand (Marikai) | Searches the web via LangSearch API; requires `LANGSEARCH_API_KEY` |
+| `semantic-index.py` | Auto (post-session) | Incrementally embeds new writing into the FAISS vector index |
+| `semantic-search.py` | Auto (pre-session) | Queries the index with the last prompt; injects resonant passages into wake |
 
 Marikai invokes `self-schedule.py`, `web_read.py`, and `web_search.py` herself via the Bash tool during a session.
 The transcript, log, and mood scripts run automatically in `wake.sh` after every session completes.

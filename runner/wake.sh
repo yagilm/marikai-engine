@@ -15,7 +15,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BRAIN_DIR="$PROJECT_DIR/marikai-brain"
 
 # Use the runner venv's Python for semantic scripts (sentence-transformers, faiss)
-VENV_PYTHON="$SCRIPT_DIR/venv/bin/python3"
+if [ -n "$SEMANTIC_VENV" ]; then
+  VENV_PYTHON="$SEMANTIC_VENV/bin/python3"
+else
+  VENV_PYTHON="$SCRIPT_DIR/venv/bin/python3"
+fi
 if [ ! -f "$VENV_PYTHON" ]; then
   VENV_PYTHON="python3"
 fi
@@ -42,6 +46,9 @@ LOCATION="${LOCATION:-Athens, Greece}"
 GIT_COMMIT="${GIT_COMMIT:-false}"
 INPUT_MIN="${INPUT_MIN:-1}"
 INPUT_MAX="${INPUT_MAX:-3}"
+SEMANTIC_ENABLED="${SEMANTIC_ENABLED:-true}"
+SEMANTIC_TOP_K="${SEMANTIC_TOP_K:-5}"
+SEMANTIC_VENV="${SEMANTIC_VENV:-}"
 
 # ─── Session Type ────────────────────────────────────────────────────────────
 
@@ -308,8 +315,8 @@ fi
 
 SEMANTIC_SECTION=""
 SEMANTIC_SCRIPT="$SCRIPT_DIR/scripts/semantic-search.py"
-if [ -f "$SEMANTIC_SCRIPT" ] && [ -f "$PROMPT_FILE" ]; then
-  SEMANTIC_RESULTS=$("$VENV_PYTHON" "$SEMANTIC_SCRIPT" --query-file "$PROMPT_FILE" --top 5 2>/dev/null || true)
+if [ "$SEMANTIC_ENABLED" = "true" ] && [ -f "$SEMANTIC_SCRIPT" ] && [ -f "$PROMPT_FILE" ]; then
+  SEMANTIC_RESULTS=$("$VENV_PYTHON" "$SEMANTIC_SCRIPT" --query-file "$PROMPT_FILE" --top "$SEMANTIC_TOP_K" 2>/dev/null || true)
   if [ -n "$SEMANTIC_RESULTS" ]; then
     SEMANTIC_SECTION="## Resonant Passages
 
