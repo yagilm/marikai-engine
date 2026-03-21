@@ -11,12 +11,14 @@ OUTPUT_FILE="$2"
 SESSION_ID=$(jq -r 'select(.type == "system") | .session_id' "$INPUT_FILE" 2>/dev/null | head -1)
 DATE=$(date -Iseconds)
 NUM_TURNS=$(jq -r 'select(.type == "result") | .num_turns' "$INPUT_FILE" 2>/dev/null | tail -1)
+DURATION_S=$(jq -r 'select(.type == "result") | (.duration_ms // 0) / 1000 | floor' "$INPUT_FILE" 2>/dev/null | tail -1)
 
 cat > "$OUTPUT_FILE" << HEADER
 ---
 date: $DATE
 session_id: $SESSION_ID
 num_turns: $NUM_TURNS
+duration_s: $DURATION_S
 ---
 
 # Session Transcript

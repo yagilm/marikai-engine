@@ -366,6 +366,7 @@ STREAM_FILE="$BRAIN_DIR/data/last-session-stream.jsonl"
 TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${SESSION_TYPE}-transcript.md"
 
 echo "[$TIMESTAMP] Starting session (model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
+SESSION_START_EPOCH=$(date +%s)
 
 export MARIKAI_BRAIN_DIR="$BRAIN_DIR"
 
@@ -379,8 +380,18 @@ claude \
   -p "$WAKE_PROMPT" \
   2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE"
 
+SESSION_ELAPSED=$(( $(date +%s) - SESSION_START_EPOCH ))
+SESSION_ELAPSED_H=$((SESSION_ELAPSED / 3600))
+SESSION_ELAPSED_M=$(( (SESSION_ELAPSED % 3600) / 60 ))
+SESSION_ELAPSED_S=$((SESSION_ELAPSED % 60))
+if [ "$SESSION_ELAPSED_H" -gt 0 ]; then
+  SESSION_ELAPSED_FMT="${SESSION_ELAPSED_H}h ${SESSION_ELAPSED_M}m ${SESSION_ELAPSED_S}s"
+else
+  SESSION_ELAPSED_FMT="${SESSION_ELAPSED_M}m ${SESSION_ELAPSED_S}s"
+fi
+
 echo "" >> "$LOG_FILE"
-echo "[$TIMESTAMP] Session complete." >> "$LOG_FILE"
+echo "[$(date +"%Y-%m-%d %H:%M:%S")] Session complete. Duration: $SESSION_ELAPSED_FMT" >> "$LOG_FILE"
 
 # ─── Post-session: transcript + structured log ───────────────────────────────
 

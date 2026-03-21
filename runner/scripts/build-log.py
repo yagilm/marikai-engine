@@ -5,6 +5,9 @@ Reads all *-transcript.md files from marikai-brain/logs/,
 extracts the ## Final Response section from each,
 and writes a single log.md sorted newest-first.
 
+Duration is read from the transcript frontmatter (duration_s field) if present,
+with fallback to sessions.jsonl for older transcripts that predate the field.
+
 Usage:
     python3 build-log.py            # writes to marikai-brain/data/session-log.md
     python3 build-log.py --out /path/to/log.md
@@ -12,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -25,8 +29,43 @@ LOGS_DIR = _BRAIN_DIR / "logs"
 DEFAULT_OUT = _BRAIN_DIR / "data" / "session-log.md"
 
 
-def parse_transcript(path: Path) -> tuple[datetime | None, str, str]:
-    """Return (datetime, session_label, final_response_text)."""
+def format_duration(seconds: int) -> str:
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h:
+        return f"{h}h {m}m {s}s"
+    return f"{m}m {s}s"
+
+
+def load_sessions_index() -> dict[tuple[str, str], int]:
+    """Load sessions.jsonl into a dict keyed by (date_str, session_type) → duration_s.
+
+    Used as fallback for transcripts that don't have duration_s in their frontmatter.
+    When multiple sessions share the same date+type, the last one wins (fine in practice).
+    """
+    sessions_path = LOGS_DIR / "sessions.jsonl"
+    index: dict[tuple[str, str], int] = {}
+    if not sessions_path.exists():
+        return index
+    for line in sessions_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        t = entry.get("t", "")
+        session = entry.get("session", "")
+        duration_s = entry.get("duration_s")
+        if t and session and duration_s is not None:
+            index[(t[:10], session)] = int(duration_s)
+    return index
+
+
+def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None]:
+    """Return (datetime, session_label, final_response_text, duration_s)."""
     raw = path.read_text(encoding="utf-8")
 
     # Extract date from frontmatter
@@ -54,6 +93,12 @@ def parse_transcript(path: Path) -> tuple[datetime | None, str, str]:
     session = parts[3] if len(parts) > 3 else "session"
     date_str = "-".join(parts[:3]) if len(parts) >= 3 else name
 
+    # Extract duration_s from frontmatter
+    duration_s: int | None = None
+    dur_match = re.search(r"^duration_s:\s*(\d+)$", raw, re.MULTILINE)
+    if dur_match:
+        duration_s = int(dur_match.group(1))
+
     # Extract Final Response section
     final = ""
     match = re.search(r"^##\s+Final Response\s*\n(.*)", raw, re.MULTILINE | re.DOTALL)
@@ -61,7 +106,7 @@ def parse_transcript(path: Path) -> tuple[datetime | None, str, str]:
         final = match.group(1).strip()
 
     label = f"{date_str} — {session}"
-    return dt, label, final
+    return dt, label, final, duration_s
 
 
 def build_log(out_path: Path) -> None:
@@ -75,14 +120,25 @@ def build_log(out_path: Path) -> None:
         )
         return
 
-    entries: list[tuple[datetime, str, str]] = []
+    sessions_index = load_sessions_index()
+
+    entries: list[tuple[datetime, str, str, int | None]] = []
     for path in transcripts:
-        dt, label, final = parse_transcript(path)
+        dt, label, final, duration_s = parse_transcript(path)
         if not final:
             continue
         if dt is None:
             dt = datetime.fromtimestamp(path.stat().st_mtime)
-        entries.append((dt, label, final))
+
+        # Fallback: look up duration from sessions.jsonl
+        if duration_s is None:
+            name = path.stem.replace("-transcript", "")
+            parts = name.split("-")
+            date_str = "-".join(parts[:3]) if len(parts) >= 3 else ""
+            session_type = parts[3] if len(parts) > 3 else ""
+            duration_s = sessions_index.get((date_str, session_type))
+
+        entries.append((dt, label, final, duration_s))
 
     # Newest first
     entries.sort(key=lambda e: e[0], reverse=True)
@@ -97,8 +153,9 @@ def build_log(out_path: Path) -> None:
         "",
     ]
 
-    for i, (_, label, final) in enumerate(entries):
-        lines.append(f"### {label}")
+    for i, (_, label, final, duration_s) in enumerate(entries):
+        dur_str = f"  ·  {format_duration(duration_s)}" if duration_s else ""
+        lines.append(f"### {label}{dur_str}")
         lines.append("")
         lines.append(final)
         if i < len(entries) - 1:
