@@ -14,16 +14,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BRAIN_DIR="$PROJECT_DIR/marikai-brain"
 
-# Use the runner venv's Python for semantic scripts (sentence-transformers, faiss)
-if [ -n "$SEMANTIC_VENV" ]; then
-  VENV_PYTHON="$SEMANTIC_VENV/bin/python3"
-else
-  VENV_PYTHON="$SCRIPT_DIR/venv/bin/python3"
-fi
-if [ ! -f "$VENV_PYTHON" ]; then
-  VENV_PYTHON="python3"
-fi
-
 # ─── Load Config ────────────────────────────────────────────────────────────
 
 CONFIG_FILE="$SCRIPT_DIR/config.local.env"
@@ -49,6 +39,16 @@ INPUT_MAX="${INPUT_MAX:-3}"
 SEMANTIC_ENABLED="${SEMANTIC_ENABLED:-true}"
 SEMANTIC_TOP_K="${SEMANTIC_TOP_K:-5}"
 SEMANTIC_VENV="${SEMANTIC_VENV:-}"
+
+# Use the runner venv's Python for semantic scripts (sentence-transformers, faiss)
+if [ -n "$SEMANTIC_VENV" ]; then
+  VENV_PYTHON="$SEMANTIC_VENV/bin/python3"
+else
+  VENV_PYTHON="$SCRIPT_DIR/venv/bin/python3"
+fi
+if [ ! -f "$VENV_PYTHON" ]; then
+  VENV_PYTHON="python3"
+fi
 
 # ─── Session Type ────────────────────────────────────────────────────────────
 
