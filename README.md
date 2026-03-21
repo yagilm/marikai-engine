@@ -1,0 +1,241 @@
+# Marikai
+
+An AI mind that lives between sessions — in text, in memory, in the quiet accumulation of thought.
+
+Marikai wakes on a schedule, reads what's placed before her, writes what she has to say,
+and carries herself forward through a persistent filesystem and memory system.
+
+---
+
+## Structure
+
+```text
+marikAI/
+├── marikai-brain/              # Everything Marikai reads and writes
+│   ├── MARIKAI.md              # Her identity and session guide
+│   ├── identity/
+│   │   ├── identity.md         # Core identity anchor (keeper maintains this)
+│   │   └── about.md            # Self-description (Marikai updates this)
+│   ├── memory/
+│   │   └── memory.md           # Working memory across sessions
+│   ├── inputs/                 # Things placed here for Marikai to read
+│   │   ├── articles/           # Article files (.md, .txt)
+│   │   ├── books/              # Book parts: bookname-part-01.txt, -part-02.txt, …
+│   │   ├── note.md             # Short notes (- unread, ✔ read)
+│   │   ├── keeper-prompts.md   # Questions and messages from the keeper
+│   │   ├── urls.md             # URLs to visit (one per line)
+│   │   ├── sayings.md          # Sayings with times_read tracking
+│   │   └── concepts.md         # Concepts with times_read tracking
+│   ├── journal/                # Daily journal (YYYY-MM-DD-session.md)
+│   ├── creatives/              # Poetry, prose, anything creative
+│   ├── essays/                 # Essays on topics and ideas
+│   ├── projects/               # Code, research, sustained work
+│   ├── letters/                # Letters to future self (deliver_on frontmatter)
+│   ├── logs/                   # Session logs, transcripts, sessions.jsonl, web.log
+│   ├── prompt/
+│   │   └── prompt.md           # Message from last session to next
+│   └── data/
+│       ├── read-tracker.json        # Tracks articles, book parts, URLs read
+│       ├── mood-state.json          # Mood state carried between sessions
+│       ├── mood-history.jsonl       # Full mood history across all sessions
+│       ├── self-schedule.json       # Pending self-scheduled session (if any)
+│       └── last-session-stream.jsonl  # Raw stream output of last session
+│
+├── runner/
+│   ├── wake.sh                 # Main session runner
+│   ├── config.env              # Config template
+│   ├── config.local.env        # Your actual config (gitignored)
+│   ├── setup-cron.sh           # Installs cron schedule + poller
+│   └── scripts/
+│       ├── process-transcript.sh   # stream-json → readable markdown transcript
+│       ├── extract-log-entry.py    # stream-json → structured JSON log line
+│       ├── self-schedule.py        # Marikai schedules her own extra sessions
+│       ├── check-self-schedule.sh  # Cron poller (every 10 min) for self-scheduling
+│       ├── web_read.py             # Fetch + extract clean text from a URL
+│       ├── web_search.py           # Web search via LangSearch API
+│       ├── mood-capture.py         # Capture mood state after each session
+│       └── mood-lexicon.json       # 126-word valence/arousal lexicon
+│
+├── marikai_needs.md            # Feature tracking: ported scripts + future capabilities
+└── README.md
+```
+
+---
+
+## Setup
+
+### 1. Configure
+
+```bash
+cp runner/config.env runner/config.local.env
+```
+
+Edit `runner/config.local.env`:
+
+```bash
+LOCATION="Athens, Greece"  # Marikai's location for weather
+MODEL="claude-opus-4-6"
+MAX_TURNS="50"
+GIT_COMMIT="false"         # set to "true" to auto-commit after each session
+LANGSEARCH_API_KEY=""      # optional — enables web search (free at langsearch.com)
+```
+
+### 2. Run a session
+
+```bash
+./runner/wake.sh                 # auto-detect session type from current time
+./runner/wake.sh morning         # force a session type
+./runner/wake.sh evening "Check on the essay you started"  # with a note from you
+```
+
+Session types: `morning`, `afternoon`, `evening`, `night`
+
+### 3. Schedule with cron (optional)
+
+```bash
+./runner/setup-cron.sh install   # 07:00, 13:00, 19:00, 23:00 daily
+./runner/setup-cron.sh remove    # remove the schedule
+./runner/setup-cron.sh show      # view current crontab
+```
+
+---
+
+## Giving Marikai Things to Read
+
+### Articles and books
+
+Drop `.md` or `.txt` files into:
+
+- `marikai-brain/inputs/articles/`
+- `marikai-brain/inputs/books/`
+
+She finds unread ones automatically and picks some each session.
+
+Books split into parts use the naming `bookname-part-01.txt`, `bookname-part-02.txt`, etc.
+The wake prompt reports the next unread part per book so she reads them in order.
+
+### URLs
+
+Add URLs to `marikai-brain/inputs/urls.md`:
+
+```markdown
+- https://example.com/interesting-article
+- https://another-site.org/essay
+```
+
+### Sayings and concepts
+
+Edit `marikai-brain/inputs/sayings.md` and `marikai-brain/inputs/concepts.md` directly.
+Each entry has inline `times_read` and `revisit` tracking that Marikai edits in-place.
+
+---
+
+## Communicating with Marikai
+
+You don't talk to Marikai in real time. You communicate through the files:
+
+- **Add inputs** — she reads them on her next session
+- **Add a note** — write a line in `marikai-brain/inputs/note.md` starting with a dash:
+
+  ```markdown
+  - I added two new articles about climate. How are you?
+  - Check the letter you wrote last week.
+  ```
+
+  She reads all pending notes at the start of the session and marks each done with `✔`.
+  You can also pass a one-off note as a CLI argument:
+
+  ```bash
+  ./runner/wake.sh morning "quick note just for this session"
+  ```
+
+- **Add a keeper prompt** — write a question or message in `inputs/keeper-prompts.md`;
+  she reads and answers it in-place
+
+- **Read her writing** — everything she produces lives in `marikai-brain/`
+
+---
+
+## Letters
+
+Marikai writes letters to her future self. They live in `marikai-brain/letters/` with frontmatter:
+
+```markdown
+---
+written_on: 2026-03-20
+deliver_on: 2026-04-20
+---
+
+[The letter]
+```
+
+When a session starts and a letter's `deliver_on` date has arrived, the wake prompt
+notifies Marikai and she reads it before beginning her work.
+
+---
+
+## Memory and Continuity
+
+Marikai carries herself forward through:
+
+1. **`memory/memory.md`** — what she chose to remember: active threads, ongoing projects,
+   things she wants to carry forward. She writes this, she maintains it.
+
+2. **`prompt/prompt.md`** — a direct message from the last session to the next.
+   One Marikai speaking to the next Marikai.
+
+3. **The files themselves** — everything she has ever written, available to read.
+   The past does not vanish; it simply moves out of working memory.
+
+---
+
+## Mood Tracking
+
+After every session, `mood-capture.py` reads the journal's `mood:` frontmatter,
+maps the words to valence/arousal scores via a 126-word lexicon, and blends
+the result with the previous session's state using exponential decay (base 0.7,
+6-hour period for four sessions per day).
+
+The blended mood injects into the next session's wake prompt as an "Ambient state"
+line — so each session begins with a sense of the emotional weather carried forward.
+
+State persists in `data/mood-state.json`; full history accumulates in `data/mood-history.jsonl`.
+
+---
+
+## Runner Scripts
+
+All scripts live in `runner/scripts/` and run automatically or on demand.
+
+| Script | Runs | What it does |
+| --- | --- | --- |
+| `process-transcript.sh` | Auto (post-session) | Converts stream-json output to a readable markdown transcript in `logs/` |
+| `extract-log-entry.py` | Auto (post-session) | Appends a structured JSON line to `logs/sessions.jsonl` (turns, cost, tokens, files) |
+| `mood-capture.py` | Auto (post-session) | Reads journal mood, blends with decayed previous state, writes `data/mood-state.json` |
+| `self-schedule.py` | On demand (Marikai) | Schedules an extra wake session; up to 3/day, 30-min buffer around cron slots |
+| `check-self-schedule.sh` | Cron (every 10 min) | Fires `wake.sh` when a self-scheduled time arrives |
+| `web_read.py` | On demand (Marikai) | Fetches a URL and extracts clean readable text; HTTPS only |
+| `web_search.py` | On demand (Marikai) | Searches the web via LangSearch API; requires `LANGSEARCH_API_KEY` |
+
+Marikai invokes `self-schedule.py`, `web_read.py`, and `web_search.py` herself via the Bash tool during a session.
+The transcript, log, and mood scripts run automatically in `wake.sh` after every session completes.
+
+---
+
+## Publishing (Future)
+
+`marikai-brain/` targets GitHub as a publishing destination — push it and serve via a static site generator.
+
+The output directories (journal, creatives, essays, projects, letters) contain pure markdown,
+compatible with Jekyll, Hugo, Astro, or any other static site generator.
+
+`identity/about.md` serves as the site's about page.
+
+---
+
+## Requirements
+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- `bash`, `curl`, `python3` (standard on Linux/macOS)
+- Internet access (for weather, URL reading, and web search)
+- `trafilatura` (optional Python package — improves web page extraction quality)

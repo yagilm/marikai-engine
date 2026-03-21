@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /home/manos/personal/code/llm-persistance/marikAI/runner/wake.sh /home/manos/personal/code/llm-persistance/marikAI/runner/setup-cron.sh)",
+      "Bash(bash -n /home/manos/personal/code/llm-persistance/marikAI/runner/wake.sh)",
+      "Bash(chmod +x /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/process-transcript.sh /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/check-self-schedule.sh /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/self-schedule.py /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/extract-log-entry.py /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/web_read.py)",
+      "Bash(bash -n /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/process-transcript.sh)",
+      "Bash(bash -n /home/manos/personal/code/llm-persistance/marikAI/runner/scripts/check-self-schedule.sh)",
+      "Bash(bash -n /home/manos/personal/code/llm-persistance/marikAI/runner/setup-cron.sh)",
+      "WebSearch",
+      "Bash(curl -s \"https://yagilm.github.io/marikai/journal/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://yagilm.github.io/marikai/essays/2026-03-21-the-art-of-not-reaching/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://yagilm.github.io/marikai/essays/2026-03-20-the-pattern-not-the-wood/\")",
+      "Bash(curl -s \"https://yagilm.github.io/marikai/log/\")",
+      "Bash(curl -s \"https://api.github.com/repos/yagilm/marikai/pages/builds/latest\" -H \"Accept: application/vnd.github.v3+json\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n%{redirect_url}\" \"https://yagilm.github.io/marikai/journal/2026-03-21-midnight\")",
+      "Bash(curl -sI \"https://yagilm.github.io/marikai/journal/2026-03-21-midnight/\")",
+      "Bash(curl -sI \"https://yagilm.github.io/marikai/journal/2026-03-20-morning/\")",
+      "Bash(xxd)",
+      "Bash(curl -sI \"https://yagilm.github.io/marikai/journal/2026-03-21-midnight\")",
+      "Bash(curl -sI \"https://raw.githubusercontent.com/yagilm/marikai/main/_journal/2026-03-21-midnight.md\")",
+      "Bash(find /home/manos/personal/code/llm-persistance/marikAI/marikai-brain -name *morning* -o -name *afternoon* -o -name *evening* -o -name *night*)",
+      "Read(//home/manos/personal/code/llm-persistance/claude-runner/**)",
+      "Bash(grep -r \"max-turns\\\\|MAX_TURNS\" /home/manos/personal/code/llm-persistance/claude-runner --include=*.sh --include=*.py --include=*.md)"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+# Secrets
+runner/config.local.env
+
+# Runner venv (recreate with: python3 -m venv runner/venv && runner/venv/bin/pip install sentence-transformers faiss-cpu)
+runner/venv/
+
+# Test session archives
+archives/
+
+# Session output (large, transient)
+marikai-brain/data/last-session-output.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# other
+marikai-brain/
+marikai_needs.md
+marikai-site/

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# process-transcript.sh — Convert stream-json session output to a readable transcript
+#
+# Usage: process-transcript.sh <stream-json-file> <output-transcript-file>
+
+set -euo pipefail
+
+INPUT_FILE="$1"
+OUTPUT_FILE="$2"
+
+SESSION_ID=$(jq -r 'select(.type == "system") | .session_id' "$INPUT_FILE" 2>/dev/null | head -1)
+DATE=$(date -Iseconds)
+NUM_TURNS=$(jq -r 'select(.type == "result") | .num_turns' "$INPUT_FILE" 2>/dev/null | tail -1)
+
+cat > "$OUTPUT_FILE" << HEADER
+---
+date: $DATE
+session_id: $SESSION_ID
+num_turns: $NUM_TURNS
+---
+
+# Session Transcript
+
+HEADER
+
+while IFS= read -r line; do
+  type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+
+  if [ "$type" = "assistant" ]; then
+    echo "$line" | jq -r '
+      .message.content[]? |
+      select(.type == "tool_use") |
+      "### Tool: \(.name)
+**Input:**
+```json
+\(.input | tojson)
+```
+"
+    ' 2>/dev/null >> "$OUTPUT_FILE" || true
+
+  elif [ "$type" = "user" ]; then
+    echo "$line" | jq -r '
+      .message.content[]? |
+      select(.type == "tool_result") |
+      "**Result:** (truncated)
+```
+\(.content | tostring | .[0:500])
+```
+---
+"
+    ' 2>/dev/null >> "$OUTPUT_FILE" || true
+  fi
+done < "$INPUT_FILE"
+
+jq -r 'select(.type == "result") | "## Final Response\n\n\(.result)"' \
+  "$INPUT_FILE" >> "$OUTPUT_FILE" 2>/dev/null || true
