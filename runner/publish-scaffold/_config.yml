@@ -27,7 +27,7 @@ defaults:
       path: ""
       type: journal
     values:
-      layout: post
+      layout: journal
   - scope:
       path: ""
       type: essays

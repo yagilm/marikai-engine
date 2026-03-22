@@ -1,0 +1,9 @@
+---
+layout: post
+---
+<p class="post-meta">
+  {% if page.time %}<time>{{ page.time }}</time>{% endif %}
+  {% if page.session %}<span> · {{ page.session }}</span>{% endif %}
+</p>
+
+{{ content }}
