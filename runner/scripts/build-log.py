@@ -64,8 +64,8 @@ def load_sessions_index() -> dict[tuple[str, str], int]:
     return index
 
 
-def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None]:
-    """Return (datetime, session_label, final_response_text, duration_s)."""
+def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None, str, str]:
+    """Return (datetime, session_label, final_response_text, duration_s, date_str, session_type)."""
     raw = path.read_text(encoding="utf-8")
 
     # Extract date from frontmatter
@@ -77,21 +77,38 @@ def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None]
         except ValueError:
             pass
 
-    # Fall back to filename date: 2026-03-21-midnight-transcript.md
-    if dt is None:
-        name = path.stem.replace("-transcript", "")
-        parts = name.split("-")
-        if len(parts) >= 3:
-            try:
-                dt = datetime.fromisoformat("-".join(parts[:3]))
-            except ValueError:
-                pass
-
-    # Session label from filename
+    # Parse filename: two formats supported
+    #   old: 2026-03-21-morning-transcript.md  → parts[3] = session
+    #   new: 2026-03-21-2359-morning-transcript.md → parts[3] = HHMM time, parts[4] = session
     name = path.stem.replace("-transcript", "")
     parts = name.split("-")
-    session = parts[3] if len(parts) > 3 else "session"
     date_str = "-".join(parts[:3]) if len(parts) >= 3 else name
+
+    has_time = len(parts) >= 5 and re.match(r"^\d{4}$", parts[3])
+    if has_time:
+        time_compact = parts[3]          # e.g. "2359"
+        session_type = parts[4] if len(parts) > 4 else "session"
+        time_display = f"{time_compact[:2]}:{time_compact[2:]}"
+    else:
+        time_compact = None
+        session_type = parts[3] if len(parts) > 3 else "session"
+        time_display = None
+
+    # Fall back to filename for datetime (more precise when time is present)
+    if dt is None:
+        if has_time:
+            try:
+                dt = datetime.strptime(f"{date_str} {time_compact[:2]}:{time_compact[2:]}", "%Y-%m-%d %H:%M")
+            except (ValueError, TypeError):
+                try:
+                    dt = datetime.fromisoformat(date_str)
+                except ValueError:
+                    pass
+        elif len(parts) >= 3:
+            try:
+                dt = datetime.fromisoformat(date_str)
+            except ValueError:
+                pass
 
     # Extract duration_s from frontmatter
     duration_s: int | None = None
@@ -105,8 +122,11 @@ def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None]
     if match:
         final = match.group(1).strip()
 
-    label = f"{date_str} — {session}"
-    return dt, label, final, duration_s
+    if time_display:
+        label = f"{date_str} {time_display} — {session_type}"
+    else:
+        label = f"{date_str} — {session_type}"
+    return dt, label, final, duration_s, date_str, session_type
 
 
 def build_log(out_path: Path) -> None:
@@ -124,18 +144,14 @@ def build_log(out_path: Path) -> None:
 
     entries: list[tuple[datetime, str, str, int | None]] = []
     for path in transcripts:
-        dt, label, final, duration_s = parse_transcript(path)
+        dt, label, final, duration_s, date_str, session_type = parse_transcript(path)
         if not final:
             continue
         if dt is None:
             dt = datetime.fromtimestamp(path.stat().st_mtime)
 
-        # Fallback: look up duration from sessions.jsonl
+        # Fallback: look up duration from sessions.jsonl (for old transcripts without duration_s)
         if duration_s is None:
-            name = path.stem.replace("-transcript", "")
-            parts = name.split("-")
-            date_str = "-".join(parts[:3]) if len(parts) >= 3 else ""
-            session_type = parts[3] if len(parts) > 3 else ""
             duration_s = sessions_index.get((date_str, session_type))
 
         entries.append((dt, label, final, duration_s))

@@ -72,8 +72,9 @@ EXTRA_NOTE="${2:-}"
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
 DATE=$(date +"%Y-%m-%d")
 TIME=$(date +"%H:%M")
+TIME_COMPACT=$(date +"%H%M")
 DAY_OF_WEEK=$(date +"%A")
-LOG_FILE="$BRAIN_DIR/logs/${DATE}-${SESSION_TYPE}.log"
+LOG_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-${SESSION_TYPE}.log"
 
 # Ensure directories exist
 mkdir -p "$BRAIN_DIR/logs" "$BRAIN_DIR/data"
@@ -363,7 +364,7 @@ Then begin. You have full read and write access to this directory."
 # ─── Run Session ─────────────────────────────────────────────────────────────
 
 STREAM_FILE="$BRAIN_DIR/data/last-session-stream.jsonl"
-TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${SESSION_TYPE}-transcript.md"
+TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-${SESSION_TYPE}-transcript.md"
 
 echo "[$TIMESTAMP] Starting session (model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
 SESSION_START_EPOCH=$(date +%s)
