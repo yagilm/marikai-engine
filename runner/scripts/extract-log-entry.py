@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 # Brain dir is passed via environment so paths stay portable
-_BRAIN_DIR: str = os.environ.get("MARIKAI_BRAIN_DIR", "")
+_BRAIN_DIR: str = os.environ.get("BRAIN_DIR", "")
 _BRAIN_PREFIX: str = _BRAIN_DIR.rstrip("/") + "/" if _BRAIN_DIR else ""
 
 SUMMARY_MAX_LENGTH: int = 200

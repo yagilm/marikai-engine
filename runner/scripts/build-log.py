@@ -22,8 +22,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("MARIKAI_BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / "marikai-brain"))
+_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
+                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
 
 LOGS_DIR = _BRAIN_DIR / "logs"
 DEFAULT_OUT = _BRAIN_DIR / "data" / "session-log.md"

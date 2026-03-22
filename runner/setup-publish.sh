@@ -16,9 +16,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.local.env"
 [ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
 
+_EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
-
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+PROJECT_NAME_CAP="${PROJECT_NAME^}"
 PUBLISH_DIR="${PUBLISH_DIR:-}"
 PUBLISH_BASEURL="${PUBLISH_BASEURL:-}"
 
@@ -26,10 +28,10 @@ if [ -z "$PUBLISH_DIR" ]; then
   echo "ERROR: PUBLISH_DIR is not set in config.local.env"
   echo ""
   echo "Steps to set up a publish repo:"
-  echo "  1. Create a GitHub repository (e.g. github.com/you/marikai)"
+  echo "  1. Create a GitHub repository (e.g. github.com/you/${PROJECT_NAME})"
   echo "  2. Enable GitHub Pages: Settings → Pages → Deploy from branch → main / root"
-  echo "  3. Clone it locally: git clone git@github.com:you/marikai.git ~/marikai-site"
-  echo "  4. Add to config.local.env: PUBLISH_DIR=\"\$HOME/marikai-site\""
+  echo "  3. Clone it locally: git clone git@github.com:you/${PROJECT_NAME}.git ~/${PROJECT_NAME}-site"
+  echo "  4. Add to config.local.env: PUBLISH_DIR=\"\$HOME/${PROJECT_NAME}-site\""
   echo "  5. Run this script again."
   exit 1
 fi
@@ -54,10 +56,13 @@ while IFS= read -r -d '' src; do
   else
     mkdir -p "$(dirname "$dest")"
     cp "$src" "$dest"
-    # Substitute baseurl placeholder in _config.yml
+    # Substitute placeholders
+    sed -i \
+      -e "s|__PUBLISH_BASEURL__|$PUBLISH_BASEURL|g" \
+      -e "s|__NAME_CAP__|$PROJECT_NAME_CAP|g" \
+      "$dest"
     if [ "$rel" = "_config.yml" ]; then
-      sed -i "s|__PUBLISH_BASEURL__|$PUBLISH_BASEURL|g" "$dest"
-      echo "  created:       $rel  (baseurl: \"$PUBLISH_BASEURL\")"
+      echo "  created:       $rel  (title: $PROJECT_NAME_CAP, baseurl: \"$PUBLISH_BASEURL\")"
     else
       echo "  created:       $rel"
     fi
@@ -87,5 +92,5 @@ echo "Done. Your publish repo is ready."
 echo ""
 echo "Next steps:"
 echo "  ./runner/publish.sh --dry-run   # preview what will be synced"
-echo "  ./runner/publish.sh             # sync Marikai's content"
+echo "  ./runner/publish.sh             # sync ${PROJECT_NAME_CAP}'s content"
 echo "  ./runner/publish.sh --push      # sync and push to GitHub"

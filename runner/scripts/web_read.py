@@ -25,14 +25,14 @@ from ipaddress import ip_address
 from pathlib import Path
 from socket import getaddrinfo
 
-_BRAIN_DIR = Path(os.environ.get("MARIKAI_BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / "marikai-brain"))
+_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
+                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
 LOG_FILE = _BRAIN_DIR / "logs" / "web.log"
 
 DEFAULT_MAX_CHARS = 15_000
 ABSOLUTE_MAX_CHARS = 50_000
 REQUEST_TIMEOUT = 15
-USER_AGENT = "Marikai/1.0"
+USER_AGENT = os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0"
 ALLOWED_SCHEMES = frozenset({"https"})
 
 

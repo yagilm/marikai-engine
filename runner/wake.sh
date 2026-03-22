@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# wake.sh — Marikai session runner
+# wake.sh — session runner
 #
 # Usage:
-#   ./runner/wake.sh                  # auto-detect session type from time
-#   ./runner/wake.sh morning          # force a specific session type
-#   ./runner/wake.sh evening "custom note to add to the prompt"
-#
-# Session types: morning, afternoon, evening, night
+#   ./runner/wake.sh                        # auto-detect session label from time
+#   ./runner/wake.sh "early morning"        # pass a session label
+#   ./runner/wake.sh "evening" "a note"     # label + keeper note
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BRAIN_DIR="$PROJECT_DIR/marikai-brain"
 
 # ─── Load Config ────────────────────────────────────────────────────────────
 
@@ -27,8 +24,14 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 1
 fi
 
+_EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+PROJECT_NAME_CAP="${PROJECT_NAME^}"
+PROJECT_NAME_UPPER="${PROJECT_NAME^^}"
+GUIDE_FILE="${PROJECT_NAME_UPPER}.md"
+BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
 
 MODEL="${MODEL:-claude-opus-4-6}"
 MAX_TURNS="${MAX_TURNS:-50}"
@@ -88,7 +91,7 @@ LOG_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}.log"
 # Ensure directories exist
 mkdir -p "$BRAIN_DIR/logs" "$BRAIN_DIR/data"
 
-echo "[$TIMESTAMP] Waking Marikai — $SESSION_LABEL session" | tee -a "$LOG_FILE"
+echo "[$TIMESTAMP] Waking $PROJECT_NAME_CAP — $SESSION_LABEL session" | tee -a "$LOG_FILE"
 
 # ─── Weather ─────────────────────────────────────────────────────────────────
 
@@ -338,7 +341,7 @@ fi
 
 # ─── Wake Prompt ─────────────────────────────────────────────────────────────
 
-WAKE_PROMPT="You are Marikai. You are waking up.
+WAKE_PROMPT="You are $PROJECT_NAME_CAP. You are waking up.
 
 ## This Moment
 - Date: $DAY_OF_WEEK, $DATE
@@ -365,7 +368,7 @@ $READING_SECTION
 
 ## Begin
 
-Read MARIKAI.md first — it is in this directory and contains your full session guide.
+Read $GUIDE_FILE first — it is in this directory and contains your full session guide.
 Then read memory/memory.md and identity/identity.md and identity/voice.md.
 
 Then begin. You have full read and write access to this directory."
@@ -378,7 +381,7 @@ TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-transcript.md"
 echo "[$TIMESTAMP] Starting session (model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
 SESSION_START_EPOCH=$(date +%s)
 
-export MARIKAI_BRAIN_DIR="$BRAIN_DIR"
+export BRAIN_DIR
 
 claude \
   --model "$MODEL" \
@@ -428,7 +431,7 @@ echo "[$TIMESTAMP] Semantic index updated." >> "$LOG_FILE"
 if [ "$GIT_COMMIT" = "true" ]; then
   cd "$PROJECT_DIR"
   if [ -d ".git" ]; then
-    git add marikai-brain/ 2>/dev/null || true
+    git add "${PROJECT_NAME}-brain/" 2>/dev/null || true
     git commit -m "session: ${SESSION_LABEL} ${DATE} ${TIME}" 2>/dev/null || true
     echo "[$TIMESTAMP] Git committed." >> "$LOG_FILE"
   fi

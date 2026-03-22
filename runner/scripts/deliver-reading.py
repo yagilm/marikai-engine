@@ -29,8 +29,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("MARIKAI_BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / "marikai-brain"))
+_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
+                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
 
 READINGS_DIR = _BRAIN_DIR / "inputs" / "readings"
 READINGS_URLS_FILE = _BRAIN_DIR / "inputs" / "readings-urls.md"
@@ -135,7 +135,7 @@ def fetch_url(url: str) -> str:
     """Fetch a URL and return clean readable text (stdlib only)."""
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; Marikai/1.0)"},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; " + os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0)"},
     )
     with urllib.request.urlopen(req, timeout=12) as resp:
         raw = resp.read().decode("utf-8", errors="replace")

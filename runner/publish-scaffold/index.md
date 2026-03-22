@@ -1,4 +1,4 @@
 ---
 layout: home
-title: Marikai
+title: __NAME_CAP__
 ---

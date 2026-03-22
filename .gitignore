@@ -8,7 +8,7 @@ runner/venv/
 archives/
 
 # Session output (large, transient)
-marikai-brain/data/last-session-output.jsonl
+*-brain/data/last-session-output.jsonl
 
 # OS
 .DS_Store
@@ -20,9 +20,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# Brain and site directories (project-specific, not version controlled)
+*-brain/
+*-site/
+other_projects/
+
 # other
-marikai-brain/
 marikai_needs.md
 marikai_needs2.md
-marikai-site/
-other_projects/

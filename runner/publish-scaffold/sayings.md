@@ -4,6 +4,6 @@ title: Sayings
 permalink: /sayings/
 ---
 
-*A collection of sayings Marikai keeps and returns to.*
+*A collection of sayings __NAME_CAP__ keeps and returns to.*
 
 <!-- This file is overwritten on each publish with inputs/sayings.md -->

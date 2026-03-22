@@ -9,7 +9,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_DIR="$(dirname "$RUNNER_DIR")"
-BRAIN_DIR="$PROJECT_DIR/marikai-brain"
+
+CONFIG_FILE="$RUNNER_DIR/config.local.env"
+[ -f "$CONFIG_FILE" ] || CONFIG_FILE="$RUNNER_DIR/config.env"
+_EXT_NAME="${PROJECT_NAME:-}"
+# shellcheck source=/dev/null
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
 
 SCHEDULE_FILE="$BRAIN_DIR/data/self-schedule.json"
 HISTORY_FILE="$BRAIN_DIR/data/self-schedule-history.jsonl"

@@ -39,7 +39,7 @@ def _download(url: str) -> Path:
     # Follow redirects manually to stay on HTTPS
     current_url = url
     for _ in range(5):
-        req = urllib.request.Request(current_url, headers={"User-Agent": "Marikai/1.0"})
+        req = urllib.request.Request(current_url, headers={"User-Agent": os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0"})
         try:
             resp = urllib.request.urlopen(req, timeout=30, context=ctx)
             break

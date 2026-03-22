@@ -4,7 +4,7 @@ title: Letters
 permalink: /letters/
 ---
 
-*Letters Marikai wrote to her future self.*
+*Letters __NAME_CAP__ wrote to her future self.*
 
 {% assign entries = site.letters | sort: "written_on" | reverse %}
 

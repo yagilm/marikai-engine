@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# publish.sh — Sync selected marikai-brain content to a Jekyll publish repository.
+# publish.sh — Sync the brain content to a Jekyll publish repository.
 #
 # Usage:
 #   ./runner/publish.sh              # sync + commit (no push)
@@ -10,7 +10,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BRAIN_DIR="$PROJECT_DIR/marikai-brain"
 
 # ─── Load Config ─────────────────────────────────────────────────────────────
 
@@ -22,8 +21,11 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 1
 fi
 
+_EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
 
 PUBLISH_DIR="${PUBLISH_DIR:-}"
 PUBLISH_GIT_PUSH="${PUBLISH_GIT_PUSH:-false}"

@@ -25,8 +25,8 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("MARIKAI_BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / "marikai-brain"))
+_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
+                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
 LOG_FILE = _BRAIN_DIR / "logs" / "web.log"
 
 API_URL = "https://api.langsearch.com/v1/web-search"
@@ -78,7 +78,7 @@ def search(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "Marikai/1.0",
+            "User-Agent": os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0",
         },
     )
 
