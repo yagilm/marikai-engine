@@ -29,9 +29,6 @@ FILTERED_READ_PREFIXES: tuple[str, ...] = tuple(
     if p.strip("/")
 )
 
-VALID_SESSION_TYPES: frozenset[str] = frozenset(
-    {"morning", "afternoon", "evening", "night", "self"}
-)
 
 WRITE_TOOLS: frozenset[str] = frozenset({"Write", "Edit"})
 READ_TOOL: str = "Read"
@@ -227,9 +224,6 @@ def main() -> None:
     if not args.stream_file.is_file():
         sys.stderr.write(f"Stream file not found: {args.stream_file}\n")
         sys.exit(1)
-
-    if args.session_type not in VALID_SESSION_TYPES:
-        _LOG.warning("Unrecognized session type: %s", args.session_type)
 
     entry = build_log_entry(args.stream_file, args.session_type)
     sys.stdout.write(

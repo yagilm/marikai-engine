@@ -189,7 +189,7 @@ def main() -> None:
     derived = derive_from_text(body_text, lexicon)
     primary_score = self_report if self_report else derived
 
-    weight = SESSION_WEIGHTS.get(session_type, 0.5)
+    weight = SESSION_WEIGHTS.get(session_type, 1.0)
     if journal_length > 3000:
         weight = min(1.0, weight + 0.2)
     elif journal_length < 200:

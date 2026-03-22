@@ -133,12 +133,26 @@ MARIKAI_BRAIN_DIR=marikai-brain runner/venv/bin/python3 runner/scripts/semantic-
 ### 3. Run a session
 
 ```bash
-./runner/wake.sh                 # auto-detect session type from current time
-./runner/wake.sh morning         # force a session type
-./runner/wake.sh evening "Check on the essay you started"  # with a note from you
+./runner/wake.sh                              # auto-detect from current time
+./runner/wake.sh "late afternoon"             # any phrase describing the time
+./runner/wake.sh "early morning" "Check on the essay you started"  # with a note
 ```
 
-Session types: `morning`, `afternoon`, `evening`, `night`
+When no argument is given, the time is mapped to a semantic phrase:
+
+| Hours | Label |
+| --- | --- |
+| 00:00–04:59 | `after midnight` |
+| 05:00–06:59 | `early morning` |
+| 07:00–11:59 | `morning` |
+| 12:00–13:59 | `noon` |
+| 14:00–16:59 | `afternoon` |
+| 17:00–19:59 | `evening` |
+| 20:00–22:59 | `night` |
+| 23:00–23:59 | `late night` |
+
+The label is passed to Marikai in her wake prompt and stored in `logs/sessions.jsonl`.
+You can pass any free-form phrase instead — `"middle of the quiet night"`, `"just before the city wakes"` — and it will be used as-is.
 
 ### 4. Schedule with cron (optional)
 
@@ -369,6 +383,8 @@ MARIKAI_BRAIN_DIR=marikai-brain python3 runner/scripts/build-log.py
 
 This reads all `logs/*-transcript.md` files and concatenates their Final Response sections
 into a single chronological document — useful for reviewing what Marikai produced across sessions.
+Each entry is labelled with date, time, and session label (e.g. `2026-03-22 23:00 — late night`),
+pulled from `sessions.jsonl` by matching `session_id`.
 
 ---
 

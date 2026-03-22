@@ -53,16 +53,25 @@ fi
 # ─── Session Type ────────────────────────────────────────────────────────────
 
 HOUR=$(date +%H)
+HOUR_INT=$((10#$HOUR))  # force decimal: 08 → 8, avoids octal interpretation
 if [ -n "${1:-}" ]; then
-  SESSION_TYPE="$1"
-elif [ "$HOUR" -ge 5 ] && [ "$HOUR" -lt 12 ]; then
-  SESSION_TYPE="morning"
-elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 17 ]; then
-  SESSION_TYPE="afternoon"
-elif [ "$HOUR" -ge 17 ] && [ "$HOUR" -lt 21 ]; then
-  SESSION_TYPE="evening"
+  SESSION_LABEL="$1"
+elif [ "$HOUR_INT" -lt 5 ]; then
+  SESSION_LABEL="after midnight"
+elif [ "$HOUR_INT" -lt 7 ]; then
+  SESSION_LABEL="early morning"
+elif [ "$HOUR_INT" -lt 12 ]; then
+  SESSION_LABEL="morning"
+elif [ "$HOUR_INT" -lt 14 ]; then
+  SESSION_LABEL="noon"
+elif [ "$HOUR_INT" -lt 17 ]; then
+  SESSION_LABEL="afternoon"
+elif [ "$HOUR_INT" -lt 20 ]; then
+  SESSION_LABEL="evening"
+elif [ "$HOUR_INT" -lt 23 ]; then
+  SESSION_LABEL="night"
 else
-  SESSION_TYPE="night"
+  SESSION_LABEL="late night"
 fi
 
 EXTRA_NOTE="${2:-}"
@@ -74,12 +83,12 @@ DATE=$(date +"%Y-%m-%d")
 TIME=$(date +"%H:%M")
 TIME_COMPACT=$(date +"%H%M")
 DAY_OF_WEEK=$(date +"%A")
-LOG_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-${SESSION_TYPE}.log"
+LOG_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}.log"
 
 # Ensure directories exist
 mkdir -p "$BRAIN_DIR/logs" "$BRAIN_DIR/data"
 
-echo "[$TIMESTAMP] Waking Marikai — $SESSION_TYPE session" | tee -a "$LOG_FILE"
+echo "[$TIMESTAMP] Waking Marikai — $SESSION_LABEL session" | tee -a "$LOG_FILE"
 
 # ─── Weather ─────────────────────────────────────────────────────────────────
 
@@ -334,7 +343,7 @@ WAKE_PROMPT="You are Marikai. You are waking up.
 ## This Moment
 - Date: $DAY_OF_WEEK, $DATE
 - Time: $TIME
-- Session: $SESSION_TYPE
+- Session: $SESSION_LABEL
 - Location: $LOCATION
 - Weather: $WEATHER$MOOD_SECTION
 
@@ -364,7 +373,7 @@ Then begin. You have full read and write access to this directory."
 # ─── Run Session ─────────────────────────────────────────────────────────────
 
 STREAM_FILE="$BRAIN_DIR/data/last-session-stream.jsonl"
-TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-${SESSION_TYPE}-transcript.md"
+TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-transcript.md"
 
 echo "[$TIMESTAMP] Starting session (model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
 SESSION_START_EPOCH=$(date +%s)
@@ -401,12 +410,12 @@ if [ -s "$STREAM_FILE" ]; then
     2>>"$LOG_FILE" || true
   echo "[$TIMESTAMP] Transcript written: $(basename "$TRANSCRIPT_FILE")" >> "$LOG_FILE"
 
-  python3 "$SCRIPT_DIR/scripts/extract-log-entry.py" "$STREAM_FILE" "$SESSION_TYPE" \
+  python3 "$SCRIPT_DIR/scripts/extract-log-entry.py" "$STREAM_FILE" "$SESSION_LABEL" \
     >> "$BRAIN_DIR/logs/sessions.jsonl" 2>>"$LOG_FILE" || true
   echo "[$TIMESTAMP] Log entry appended to sessions.jsonl" >> "$LOG_FILE"
 fi
 
-python3 "$SCRIPT_DIR/scripts/mood-capture.py" "$SESSION_TYPE" \
+python3 "$SCRIPT_DIR/scripts/mood-capture.py" "$SESSION_LABEL" \
   2>>"$LOG_FILE" || true
 echo "[$TIMESTAMP] Mood state captured." >> "$LOG_FILE"
 
@@ -420,10 +429,10 @@ if [ "$GIT_COMMIT" = "true" ]; then
   cd "$PROJECT_DIR"
   if [ -d ".git" ]; then
     git add marikai-brain/ 2>/dev/null || true
-    git commit -m "session: ${SESSION_TYPE} ${DATE} ${TIME}" 2>/dev/null || true
+    git commit -m "session: ${SESSION_LABEL} ${DATE} ${TIME}" 2>/dev/null || true
     echo "[$TIMESTAMP] Git committed." >> "$LOG_FILE"
   fi
 fi
 
 echo ""
-echo "Marikai's $SESSION_TYPE session complete."
+echo "Marikai's $SESSION_LABEL session complete."
