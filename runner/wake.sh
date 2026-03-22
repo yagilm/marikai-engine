@@ -435,4 +435,4 @@ if [ "$GIT_COMMIT" = "true" ]; then
 fi
 
 echo ""
-echo "Marikai's $SESSION_LABEL session complete."
+echo "Post-session processing complete ($SESSION_ELAPSED_FMT total)."

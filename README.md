@@ -29,7 +29,7 @@ marikAI/
 │   │   ├── readings-urls.md    # Curated reading URLs with descriptions
 │   │   ├── sayings.md          # Sayings with times_read tracking
 │   │   └── concepts.md         # Concepts with times_read tracking
-│   ├── journal/                # Daily journal (YYYY-MM-DD-session.md)
+│   ├── journal/                # Daily journal (YYYY-MM-DD-HHMM.md)
 │   ├── creatives/              # Poetry, prose, anything creative
 │   ├── essays/                 # Essays on topics and ideas
 │   ├── projects/               # Code, research, sustained work

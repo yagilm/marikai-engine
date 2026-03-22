@@ -87,11 +87,7 @@ def handle_result(event: dict) -> None:
     print()
     print("─" * 60)
     if subtype == "success":
-        result_text = event.get("result", "")
-        if result_text:
-            print(bold("Session complete"))
-            print()
-            print(result_text)
+        print(bold("Session complete"))
     elif subtype == "error_max_turns":
         print(yellow("Max turns reached."))
 
