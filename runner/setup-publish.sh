@@ -45,23 +45,24 @@ SCAFFOLD_DIR="$SCRIPT_DIR/publish-scaffold"
 echo "Initializing publish repo at: $PUBLISH_DIR"
 echo ""
 
-# Copy scaffold files — skip any that already exist
-for f in "$SCAFFOLD_DIR"/{_config.yml,index.md,journal.md,essays.md,creatives.md,letters.md,sayings.md,.gitignore}; do
-  filename="$(basename "$f")"
-  dest="$PUBLISH_DIR/$filename"
+# Copy scaffold files recursively — skip any that already exist
+while IFS= read -r -d '' src; do
+  rel="${src#"$SCAFFOLD_DIR/"}"
+  dest="$PUBLISH_DIR/$rel"
   if [ -f "$dest" ]; then
-    echo "  skip (exists): $filename"
+    echo "  skip (exists): $rel"
   else
-    cp "$f" "$dest"
+    mkdir -p "$(dirname "$dest")"
+    cp "$src" "$dest"
     # Substitute baseurl placeholder in _config.yml
-    if [ "$filename" = "_config.yml" ]; then
+    if [ "$rel" = "_config.yml" ]; then
       sed -i "s|__PUBLISH_BASEURL__|$PUBLISH_BASEURL|g" "$dest"
-      echo "  created:       $filename  (baseurl: \"$PUBLISH_BASEURL\")"
+      echo "  created:       $rel  (baseurl: \"$PUBLISH_BASEURL\")"
     else
-      echo "  created:       $filename"
+      echo "  created:       $rel"
     fi
   fi
-done
+done < <(find "$SCAFFOLD_DIR" -type f -print0)
 
 # Initial git commit if the repo is empty
 if [ -d "$PUBLISH_DIR/.git" ]; then
