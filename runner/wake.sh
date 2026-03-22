@@ -201,7 +201,7 @@ summarize_book_parts() {
 count_unanswered_prompts() {
   local prompts_file="$BRAIN_DIR/inputs/keeper-prompts.md"
   [ -f "$prompts_file" ] || { echo 0; return; }
-  grep -c "^\*\*answered:\*\* no" "$prompts_file" 2>/dev/null || true
+  grep -c "\*\*answered:\*\* no" "$prompts_file" 2>/dev/null || true
 }
 
 UNREAD_ARTICLES=$(count_unread_articles)
