@@ -99,6 +99,10 @@ LOCATION_ENCODED=$(echo "$LOCATION" | python3 -c "import sys, urllib.parse; prin
 WEATHER=$(curl -s --max-time 8 "wttr.in/${LOCATION_ENCODED}?format=3" 2>/dev/null || echo "Weather unavailable")
 echo "[$TIMESTAMP] Weather: $WEATHER" >> "$LOG_FILE"
 
+# ─── Sky Context (moon phase, sunrise/sunset, day length) ────────────────────
+
+SKY_CONTEXT=$(python3 "$SCRIPT_DIR/scripts/sky-context.py" "$LOCATION" 2>/dev/null || echo "- Sky context unavailable")
+
 # ─── Due Letters ─────────────────────────────────────────────────────────────
 
 DUE_LETTERS=""
@@ -348,7 +352,8 @@ WAKE_PROMPT="You are $PROJECT_NAME_CAP. You are waking up.
 - Time: $TIME
 - Session: $SESSION_LABEL
 - Location: $LOCATION
-- Weather: $WEATHER$MOOD_SECTION
+- Weather: $WEATHER
+$SKY_CONTEXT$MOOD_SECTION
 
 ## Message from Your Last Self
 
