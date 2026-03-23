@@ -55,8 +55,11 @@ def load_sessions_index() -> dict[str, dict]:
         sid = entry.get("session_id", "")
         if sid:
             index[sid] = {
-                "label": entry.get("session", ""),
+                "label":      entry.get("session", ""),
                 "duration_s": entry.get("duration_s"),
+                "tools":      entry.get("tools", {}),
+                "turns":      entry.get("num_turns") or entry.get("turns"),
+                "cost_usd":   entry.get("cost_usd"),
             }
     return index
 
@@ -96,13 +99,19 @@ def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None,
         except ValueError:
             pass
 
-    # Extract Final Response section
+    # Extract Session Output section (text Marikai wrote during the session)
+    session_output = ""
+    match = re.search(r"^##\s+Session Output\s*\n(.*?)(?=^##\s|\Z)", raw, re.MULTILINE | re.DOTALL)
+    if match:
+        session_output = match.group(1).strip()
+
+    # Extract Final Response section (end-of-session summary)
     final = ""
     match = re.search(r"^##\s+Final Response\s*\n(.*)", raw, re.MULTILINE | re.DOTALL)
     if match:
         final = match.group(1).strip()
 
-    return dt, final, duration_s, session_id, date_str
+    return dt, final, session_output, duration_s, session_id, date_str
 
 
 def build_log(out_path: Path) -> None:
@@ -118,9 +127,9 @@ def build_log(out_path: Path) -> None:
 
     sessions_index = load_sessions_index()
 
-    entries: list[tuple[datetime, str, str, int | None]] = []
+    entries: list[tuple] = []
     for path in transcripts:
-        dt, final, duration_s, session_id, date_str = parse_transcript(path)
+        dt, final, session_output, duration_s, session_id, date_str = parse_transcript(path)
         if not final:
             continue
         if dt is None:
@@ -130,6 +139,9 @@ def build_log(out_path: Path) -> None:
         if duration_s is None:
             duration_s = session_entry.get("duration_s")
         session_label = session_entry.get("label", "")
+        tools    = session_entry.get("tools", {})
+        turns    = session_entry.get("turns")
+        cost_usd = session_entry.get("cost_usd")
 
         time_str = dt.strftime("%H:%M")
         if session_label:
@@ -137,7 +149,7 @@ def build_log(out_path: Path) -> None:
         else:
             label = f"{date_str} {time_str}"
 
-        entries.append((dt, label, final, duration_s))
+        entries.append((dt, label, final, session_output, duration_s, tools, turns, cost_usd))
 
     # Newest first
     entries.sort(key=lambda e: e[0], reverse=True)
@@ -152,10 +164,17 @@ def build_log(out_path: Path) -> None:
         "",
     ]
 
-    for i, (_, label, final, duration_s) in enumerate(entries):
+    for i, (_, label, final, session_output, duration_s, tools, turns, cost_usd) in enumerate(entries):
         dur_str = f"  ·  {format_duration(duration_s)}" if duration_s else ""
         lines.append(f"### {label}{dur_str}")
         lines.append("")
+
+        if session_output:
+            lines.append(session_output)
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
         lines.append(final)
         if i < len(entries) - 1:
             lines.append("")

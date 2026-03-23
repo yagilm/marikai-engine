@@ -54,5 +54,19 @@ while IFS= read -r line; do
   fi
 done < "$INPUT_FILE"
 
+# Extract text blocks Marikai output during the session, excluding the last
+# (the last text block is identical to the Final Response result)
+TEXT_OUTPUT=$(jq -rs '[
+  .[] |
+  select(.type == "assistant") |
+  .message.content[]? |
+  select(.type == "text") |
+  .text
+] | .[:-1] | .[]' "$INPUT_FILE" 2>/dev/null || true)
+
+if [ -n "$TEXT_OUTPUT" ]; then
+  { printf '## Session Output\n\n'; echo "$TEXT_OUTPUT"; printf '\n'; } >> "$OUTPUT_FILE"
+fi
+
 jq -r 'select(.type == "result") | "## Final Response\n\n\(.result)"' \
   "$INPUT_FILE" >> "$OUTPUT_FILE" 2>/dev/null || true
