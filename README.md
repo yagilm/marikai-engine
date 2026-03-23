@@ -198,7 +198,12 @@ BRAIN_DIR={PROJECT_NAME}-brain runner/venv/bin/python3 runner/scripts/semantic-i
 ./runner/wake.sh                              # auto-detect from current time
 ./runner/wake.sh "late afternoon"             # any phrase describing the time
 ./runner/wake.sh "early morning" "Check on the essay you started"  # with a note
+./runner/wake.sh --publish                    # run session, then publish to site
+./runner/wake.sh "evening" --publish          # label + auto-publish
+./runner/wake.sh "morning" "Read the draft" --publish  # label + note + auto-publish
 ```
+
+`--publish` (or `--push`) runs `publish.sh --push` automatically after all post-session processing completes — transcript, log, mood, semantic index, about.md metadata. It can appear anywhere in the argument list.
 
 When no argument is given, the time is mapped to a semantic phrase:
 

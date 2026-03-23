@@ -2,9 +2,11 @@
 # wake.sh — session runner
 #
 # Usage:
-#   ./runner/wake.sh                        # auto-detect session label from time
-#   ./runner/wake.sh "early morning"        # pass a session label
-#   ./runner/wake.sh "evening" "a note"     # label + keeper note
+#   ./runner/wake.sh                              # auto-detect session label from time
+#   ./runner/wake.sh "early morning"              # pass a session label
+#   ./runner/wake.sh "evening" "a note"           # label + keeper note
+#   ./runner/wake.sh --publish                    # run session then publish to site
+#   ./runner/wake.sh "morning" "note" --publish   # all three (flag can be anywhere)
 
 set -euo pipefail
 
@@ -52,6 +54,18 @@ fi
 if [ ! -f "$VENV_PYTHON" ]; then
   VENV_PYTHON="python3"
 fi
+
+# ─── Flags ───────────────────────────────────────────────────────────────────
+
+AUTO_PUBLISH=false
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --publish|--push) AUTO_PUBLISH=true ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+set -- "${POSITIONAL[@]+"${POSITIONAL[@]}"}"
 
 # ─── Session Type ────────────────────────────────────────────────────────────
 
@@ -449,6 +463,14 @@ if [ "$GIT_COMMIT" = "true" ]; then
     git commit -m "session: ${SESSION_LABEL} ${DATE} ${TIME}" 2>/dev/null || true
     echo "[$TIMESTAMP] Git committed." >> "$LOG_FILE"
   fi
+fi
+
+# ─── Auto-publish (optional) ─────────────────────────────────────────────────
+
+if [ "$AUTO_PUBLISH" = true ]; then
+  echo "[$TIMESTAMP] Publishing..." >> "$LOG_FILE"
+  "$SCRIPT_DIR/publish.sh" --push 2>>"$LOG_FILE" || true
+  echo "[$TIMESTAMP] Published." >> "$LOG_FILE"
 fi
 
 echo ""
