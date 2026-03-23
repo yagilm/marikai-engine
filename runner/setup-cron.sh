@@ -2,9 +2,10 @@
 # setup-cron.sh — Install the scheduled session cron jobs
 #
 # Usage:
-#   ./runner/setup-cron.sh install    # Add cron jobs
-#   ./runner/setup-cron.sh remove     # Remove cron jobs
-#   ./runner/setup-cron.sh show       # Show current crontab
+#   ./runner/setup-cron.sh install               # Add cron jobs (sessions auto-publish after each)
+#   ./runner/setup-cron.sh install --no-publish  # Add cron jobs (no auto-publish)
+#   ./runner/setup-cron.sh remove                # Remove cron jobs
+#   ./runner/setup-cron.sh show                  # Show current crontab
 
 set -euo pipefail
 
@@ -31,7 +32,15 @@ ACTION="${1:-show}"
 
 case "$ACTION" in
   install)
-    echo "Installing cron schedule for $PROJECT_NAME..."
+    # Parse --no-publish flag
+    AUTO_PUBLISH_FLAG="--publish"
+    for arg in "${@:2}"; do
+      case "$arg" in
+        --no-publish) AUTO_PUBLISH_FLAG="" ;;
+      esac
+    done
+
+    echo "Installing cron schedule for $PROJECT_NAME${AUTO_PUBLISH_FLAG:+ (auto-publish enabled)}..."
 
     LOG="$SCRIPT_DIR/../${PROJECT_NAME}-brain/logs/cron.log"
 
@@ -41,10 +50,10 @@ case "$ACTION" in
     # Add sessions (4x daily) + self-schedule poller (every 10 min)
     (crontab -l 2>/dev/null; cat <<EOF
 # $PROJECT_NAME — scheduled sessions
-0  7  * * * $WAKE_SCRIPT morning   >> $LOG 2>&1
-0  13 * * * $WAKE_SCRIPT afternoon >> $LOG 2>&1
-0  19 * * * $WAKE_SCRIPT evening   >> $LOG 2>&1
-0  23 * * * $WAKE_SCRIPT night     >> $LOG 2>&1
+0  7  * * * $WAKE_SCRIPT morning   $AUTO_PUBLISH_FLAG >> $LOG 2>&1
+0  13 * * * $WAKE_SCRIPT afternoon $AUTO_PUBLISH_FLAG >> $LOG 2>&1
+0  19 * * * $WAKE_SCRIPT evening   $AUTO_PUBLISH_FLAG >> $LOG 2>&1
+0  23 * * * $WAKE_SCRIPT night     $AUTO_PUBLISH_FLAG >> $LOG 2>&1
 # $PROJECT_NAME — self-schedule poller
 */10 * * * * $SELF_SCHED_SCRIPT    >> $LOG 2>&1
 EOF

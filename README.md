@@ -224,9 +224,21 @@ You can pass any free-form phrase instead — `"middle of the quiet night"`, `"j
 ### 5. Schedule with cron (optional)
 
 ```bash
-./runner/setup-cron.sh install   # 07:00, 13:00, 19:00, 23:00 daily
-./runner/setup-cron.sh remove    # remove the schedule
-./runner/setup-cron.sh show      # view current crontab
+./runner/setup-cron.sh install               # 07:00, 13:00, 19:00, 23:00 daily — auto-publishes after each session
+./runner/setup-cron.sh install --no-publish  # same schedule, no auto-publish
+./runner/setup-cron.sh remove                # remove the schedule
+./runner/setup-cron.sh show                  # view current crontab
+```
+
+By default, `install` adds `--publish` to each cron session so the site updates automatically.
+Use `--no-publish` if you prefer to publish manually.
+
+**Manual run and publish options** (always available regardless of cron setup):
+
+```bash
+./runner/wake.sh                   # run a session, no publish
+./runner/wake.sh --publish         # run a session, then publish
+./runner/publish.sh --push         # publish only (no session)
 ```
 
 ---
