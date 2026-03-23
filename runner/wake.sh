@@ -388,6 +388,7 @@ SESSION_START_EPOCH=$(date +%s)
 
 export BRAIN_DIR
 
+DISPLAY_LOG=$(mktemp)
 claude \
   --model "$MODEL" \
   --max-turns "$MAX_TURNS" \
@@ -396,7 +397,9 @@ claude \
   --add-dir "$BRAIN_DIR" \
   --allowedTools "Edit,Write,Read,Bash,Glob,Grep,WebFetch,WebSearch,Agent" \
   -p "$WAKE_PROMPT" \
-  2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE"
+  2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
+cat "$DISPLAY_LOG" >> "$LOG_FILE"
+rm -f "$DISPLAY_LOG"
 
 SESSION_ELAPSED=$(( $(date +%s) - SESSION_START_EPOCH ))
 SESSION_ELAPSED_H=$((SESSION_ELAPSED / 3600))
@@ -430,6 +433,12 @@ echo "[$TIMESTAMP] Mood state captured." >> "$LOG_FILE"
 "$VENV_PYTHON" "$SCRIPT_DIR/scripts/semantic-index.py" \
   2>>"$LOG_FILE" || true
 echo "[$TIMESTAMP] Semantic index updated." >> "$LOG_FILE"
+
+# ─── Track about.md edits ────────────────────────────────────────────────────
+
+python3 "$SCRIPT_DIR/scripts/update-about-meta.py" "$BRAIN_DIR" \
+  2>>"$LOG_FILE" || true
+echo "[$TIMESTAMP] about.md metadata checked." >> "$LOG_FILE"
 
 # ─── Git Commit (optional) ───────────────────────────────────────────────────
 

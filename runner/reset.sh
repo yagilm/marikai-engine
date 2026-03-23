@@ -74,6 +74,7 @@ DATA_FILES=(
   "$BRAIN_DIR/data/last-session-stream.jsonl"
   "$BRAIN_DIR/data/self-schedule.json"
   "$BRAIN_DIR/data/self-schedule-history.jsonl"
+  "$BRAIN_DIR/data/about-meta.json"
 )
 
 for f in "${DATA_FILES[@]}"; do

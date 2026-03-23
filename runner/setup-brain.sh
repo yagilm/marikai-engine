@@ -84,6 +84,9 @@ while IFS= read -r -d '' src; do
   echo "  created:       $rel"
 done < <(find "$SCAFFOLD_DIR" -type f -print0 | sort -z)
 
+# Inject visitor blurb and initial metadata into about.md
+python3 "$SCRIPT_DIR/scripts/update-about-meta.py" "$BRAIN_DIR" 2>/dev/null || true
+
 echo ""
 echo "Done. Brain initialized at: $BRAIN_DIR"
 echo ""
