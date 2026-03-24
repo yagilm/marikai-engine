@@ -442,6 +442,7 @@ All scripts live in `runner/scripts/` and run automatically or on demand.
 | `web_search.py` | On demand (AI) | Searches the web via LangSearch API; requires `LANGSEARCH_API_KEY` |
 | `semantic-index.py` | Auto (post-session) | Incrementally embeds new writing into the FAISS vector index |
 | `semantic-search.py` | Auto (pre-session) | Queries the index with the last prompt; injects resonant passages into wake |
+| `resonance.py` | On demand (AI or manual) | Finds thematic connections across all writing; writes `data/resonance.md` |
 | `deliver-reading.py` | Auto (pre-session) | Picks a reading for the session from `inputs/readings/` or `readings-urls.md` |
 | `pdf_read.py` | On demand (AI) | Extracts readable text from a PDF file or URL |
 | `live-display.py` | Auto (during session) | Reads stream-json from stdin and pretty-prints a live terminal view |

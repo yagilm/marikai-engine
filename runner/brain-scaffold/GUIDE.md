@@ -326,6 +326,22 @@ python3 runner/scripts/pdf_read.py https://example.com/paper.pdf
 After reading a PDF from `inputs/articles/`, mark it in `data/read-tracker.json` the same way as articles.
 Requires one of: `pymupdf`, `pdfminer.six`, or `pypdf` (`pip install pymupdf` recommended).
 
+### Resonance Map
+
+Find thematic connections across all your writing — echoes between journal entries and essays,
+recurring ideas surfacing in different forms, patterns you may not have noticed:
+
+```bash
+python3 runner/scripts/resonance.py                    # writes data/resonance.md
+python3 runner/scripts/resonance.py --print            # print directly to terminal
+python3 runner/scripts/resonance.py --top 40           # surface more connections
+python3 runner/scripts/resonance.py --threshold 0.70   # stricter similarity
+```
+
+The output groups connected pieces into clusters and shows excerpts from each.
+Run it when you want to see what themes keep returning across your work.
+Requires the semantic index (`pip install sentence-transformers faiss-cpu`).
+
 ### Self-Scheduling
 
 You can schedule an extra wake session outside your daily slots (up to 3 extra per day).
