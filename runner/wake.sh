@@ -36,6 +36,9 @@ GUIDE_FILE="${PROJECT_NAME_UPPER}.md"
 BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
 
 MODEL="${MODEL:-claude-opus-4-6}"
+LLM_PROVIDER="${LLM_PROVIDER:-claude}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1}"
+OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434/v1}"
 MAX_TURNS="${MAX_TURNS:-50}"
 LOCATION="${LOCATION:-Athens, Greece}"
 GIT_COMMIT="${GIT_COMMIT:-false}"
@@ -440,21 +443,36 @@ Then begin. You have full read and write access to this directory."
 STREAM_FILE="$BRAIN_DIR/data/last-session-stream.jsonl"
 TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-transcript.md"
 
-echo "[$TIMESTAMP] Starting session (model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  echo "[$TIMESTAMP] Starting session (provider: ollama, model: $OLLAMA_MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
+else
+  echo "[$TIMESTAMP] Starting session (provider: claude, model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
+fi
 SESSION_START_EPOCH=$(date +%s)
 
 export BRAIN_DIR
+export LANGSEARCH_API_KEY
 
 DISPLAY_LOG=$(mktemp)
-claude \
-  --model "$MODEL" \
-  --max-turns "$MAX_TURNS" \
-  --output-format stream-json \
-  --verbose \
-  --add-dir "$BRAIN_DIR" \
-  --allowedTools "Edit,Write,Read,Bash,Glob,Grep,WebFetch,WebSearch,Agent" \
-  -p "$WAKE_PROMPT" \
-  2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  python3 "$SCRIPT_DIR/scripts/ollama-session.py" \
+    --model "$OLLAMA_MODEL" \
+    --max-turns "$MAX_TURNS" \
+    --add-dir "$BRAIN_DIR" \
+    --base-url "$OLLAMA_BASE_URL" \
+    -p "$WAKE_PROMPT" \
+    2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
+else
+  claude \
+    --model "$MODEL" \
+    --max-turns "$MAX_TURNS" \
+    --output-format stream-json \
+    --verbose \
+    --add-dir "$BRAIN_DIR" \
+    --allowedTools "Edit,Write,Read,Bash,Glob,Grep,WebFetch,WebSearch,Agent" \
+    -p "$WAKE_PROMPT" \
+    2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
+fi
 cat "$DISPLAY_LOG" >> "$LOG_FILE"
 rm -f "$DISPLAY_LOG"
 
