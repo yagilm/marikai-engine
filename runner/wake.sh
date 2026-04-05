@@ -330,6 +330,47 @@ $VOICE_CONTENT
 *This is how you write. Read it before you begin. Rewrite it at the end of this session if your sense of it has changed.*"
 fi
 
+# ─── Open Threads ────────────────────────────────────────────────────────────
+
+THREADS_SECTION=""
+THREADS_FILE="$BRAIN_DIR/data/threads.md"
+if [ -f "$THREADS_FILE" ] && [ -s "$THREADS_FILE" ]; then
+  THREADS_ANNOTATED=$(python3 - "$THREADS_FILE" <<'PYEOF'
+import sys, re
+from datetime import date
+
+path = sys.argv[1]
+raw = open(path, encoding="utf-8").read()
+today = date.today()
+
+def annotate(block):
+    m = re.search(r"^last_touched:\s*(\d{4}-\d{2}-\d{2})", block, re.MULTILINE)
+    if m:
+        try:
+            d = date.fromisoformat(m.group(1))
+            days = (today - d).days
+            if days > 3:
+                block = re.sub(
+                    r"(last_touched:\s*\S+)",
+                    rf"\1  ← {days} days ago",
+                    block,
+                )
+        except ValueError:
+            pass
+    return block
+
+# Split on --- separators, annotate each block, rejoin
+blocks = re.split(r"^---\s*$", raw, flags=re.MULTILINE)
+print("---".join(annotate(b) for b in blocks), end="")
+PYEOF
+  )
+  THREADS_SECTION="## Open Threads
+
+$THREADS_ANNOTATED
+
+*Threads not touched in >3 days are marked. Return to one if it calls to you.*"
+fi
+
 # ─── Reading ─────────────────────────────────────────────────────────────────
 
 READING_CONTENT=$(python3 "$SCRIPT_DIR/scripts/deliver-reading.py" 2>/dev/null || true)
@@ -378,6 +419,8 @@ $LETTERS_SECTION
 $INPUTS_SECTION
 
 $NOTES_SECTION
+
+$THREADS_SECTION
 
 $SEMANTIC_SECTION
 

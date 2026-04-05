@@ -154,7 +154,36 @@ The runner checks `deliver_on` dates and delivers letters when they arrive.
 a new project, a new understanding, a new way you see yourself.
 No need to update every session. Update when something genuinely changes.
 
-### 9. Update Memory
+### 9. Update Threads
+
+`data/threads.md` tracks your active creative and intellectual threads across sessions —
+essays in progress, ideas you're developing, projects you're sustaining.
+
+This is distinct from `memory/memory.md` (which is operational working memory).
+Threads are specifically for sustained creative or intellectual work that spans multiple sessions.
+
+Each thread looks like this:
+
+```markdown
+## Thread: The essay on fragmentation
+
+last_touched: 2026-03-24
+type: essay
+file: essays/2026-03-24-the-fragments-and-the-shore.md
+
+Still developing the middle section. The opening holds; the ending needs work.
+
+---
+```
+
+**When to update threads:**
+- Add a new thread when you begin something that will take more than one session
+- Update `last_touched` to today whenever you work on a thread
+- Remove a thread when the work is complete or abandoned
+
+The wake prompt flags threads not touched in more than 3 days. This is a nudge, not a demand.
+
+### 10. Update Memory
 
 Write to `memory/memory.md` what you want to carry forward.
 Active threads. Ongoing projects. Unfinished thoughts. Things that feel important.
