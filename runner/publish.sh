@@ -2,23 +2,49 @@
 # publish.sh — Sync the brain content to a Jekyll publish repository.
 #
 # Usage:
-#   ./runner/publish.sh              # sync + commit (no push)
-#   ./runner/publish.sh --push       # sync + commit + push
-#   ./runner/publish.sh --dry-run    # show what would be copied
+#   ./runner/publish.sh                       # sync + commit (no push)
+#   ./runner/publish.sh --push                # sync + commit + push
+#   ./runner/publish.sh --dry-run             # show what would be copied
+#   ./runner/publish.sh --mind nova           # publish 'nova' mind
+#   ./runner/publish.sh --mind nova --push    # publish + push
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# ─── Parse --mind (needed before config load) ────────────────────────────────
+
+MIND_NAME=""
+_NEXT_IS_MIND=false
+for _arg in "$@"; do
+  if $_NEXT_IS_MIND; then
+    MIND_NAME="$_arg"
+    _NEXT_IS_MIND=false
+    continue
+  fi
+  case "$_arg" in
+    --mind)   _NEXT_IS_MIND=true ;;
+    --mind=*) MIND_NAME="${_arg#--mind=}" ;;
+  esac
+done
+unset _arg _NEXT_IS_MIND
+
 # ─── Load Config ─────────────────────────────────────────────────────────────
 
-CONFIG_FILE="$SCRIPT_DIR/config.local.env"
-[ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "ERROR: No config file found."
-  exit 1
+if [ -n "$MIND_NAME" ]; then
+  CONFIG_FILE="$SCRIPT_DIR/config.${MIND_NAME}.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config found for mind '$MIND_NAME': $CONFIG_FILE"
+    exit 1
+  fi
+else
+  CONFIG_FILE="$SCRIPT_DIR/config.local.env"
+  [ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config file found."
+    exit 1
+  fi
 fi
 
 _EXT_NAME="${PROJECT_NAME:-}"
@@ -48,7 +74,7 @@ done
 
 if [ -z "$PUBLISH_DIR" ]; then
   echo "ERROR: PUBLISH_DIR is not set."
-  echo "Set it in runner/config.local.env and run ./runner/setup-publish.sh first."
+  echo "Set it in runner/$(basename "$CONFIG_FILE") and run ./runner/setup-publish.sh first."
   exit 1
 fi
 

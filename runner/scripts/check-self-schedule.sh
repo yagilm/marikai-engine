@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # check-self-schedule.sh — Cron poller: fires self-scheduled wake sessions when due
 #
-# Add to crontab via: ./runner/setup-cron.sh install
+# Usage:
+#   ./runner/scripts/check-self-schedule.sh --mind nova   # poll for 'nova'
+#   ./runner/scripts/check-self-schedule.sh               # uses config.local.env (legacy)
+#
+# Add to crontab via: ./runner/setup-cron.sh install --mind <name>
 # Runs every 10 minutes, exits silently if nothing is due.
 
 set -euo pipefail
@@ -10,8 +14,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_DIR="$(dirname "$RUNNER_DIR")"
 
-CONFIG_FILE="$RUNNER_DIR/config.local.env"
-[ -f "$CONFIG_FILE" ] || CONFIG_FILE="$RUNNER_DIR/config.env"
+# ─── Parse --mind ─────────────────────────────────────────────────────────────
+
+MIND_NAME=""
+_NEXT_IS_MIND=false
+for _arg in "$@"; do
+  if $_NEXT_IS_MIND; then
+    MIND_NAME="$_arg"
+    _NEXT_IS_MIND=false
+    continue
+  fi
+  case "$_arg" in
+    --mind)   _NEXT_IS_MIND=true ;;
+    --mind=*) MIND_NAME="${_arg#--mind=}" ;;
+  esac
+done
+unset _arg _NEXT_IS_MIND
+
+# ─── Load config ──────────────────────────────────────────────────────────────
+
+if [ -n "$MIND_NAME" ]; then
+  CONFIG_FILE="$RUNNER_DIR/config.${MIND_NAME}.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config found for mind '$MIND_NAME': $CONFIG_FILE" >&2
+    exit 1
+  fi
+else
+  CONFIG_FILE="$RUNNER_DIR/config.local.env"
+  [ -f "$CONFIG_FILE" ] || CONFIG_FILE="$RUNNER_DIR/config.env"
+fi
+
 _EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
@@ -24,8 +56,8 @@ HISTORY_FILE="$BRAIN_DIR/data/self-schedule-history.jsonl"
 # Exit if no schedule pending
 [ -f "$SCHEDULE_FILE" ] || exit 0
 
-# Don't fire if a session is already running
-if pgrep -f "wake.sh" > /dev/null 2>&1; then
+# Don't fire if a session for this mind is already running
+if pgrep -f "wake.sh --mind $PROJECT_NAME" > /dev/null 2>&1; then
   exit 0
 fi
 
@@ -46,4 +78,4 @@ printf '{"date":"%s","wake_at":"%s","reason":"%s","fired_at":"%s"}\n' \
 
 rm -f "$SCHEDULE_FILE"
 
-exec "$RUNNER_DIR/wake.sh" self "$REASON"
+exec "$RUNNER_DIR/wake.sh" --mind "$PROJECT_NAME" self "$REASON"

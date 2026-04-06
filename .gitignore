@@ -1,5 +1,5 @@
 # Secrets
-runner/config.local.env
+runner/config.*.env
 
 # Runner venv (recreate with: python3 -m venv runner/venv && runner/venv/bin/pip install sentence-transformers faiss-cpu)
 runner/venv/

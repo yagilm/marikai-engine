@@ -2,28 +2,56 @@
 # wake.sh — session runner
 #
 # Usage:
-#   ./runner/wake.sh                              # auto-detect session label from time
-#   ./runner/wake.sh "early morning"              # pass a session label
-#   ./runner/wake.sh "evening" "a note"           # label + keeper note
-#   ./runner/wake.sh --publish                    # run session then publish to site
-#   ./runner/wake.sh "morning" "note" --publish   # all three (flag can be anywhere)
+#   ./runner/wake.sh                                    # auto-detect session label from time
+#   ./runner/wake.sh "early morning"                    # pass a session label
+#   ./runner/wake.sh "evening" "a note"                 # label + keeper note
+#   ./runner/wake.sh --publish                          # run session then publish to site
+#   ./runner/wake.sh "morning" "note" --publish         # all three (flag can be anywhere)
+#   ./runner/wake.sh --mind nova                        # run the 'nova' mind (loads config.nova.env)
+#   ./runner/wake.sh --mind nova "morning" --publish    # mind + label + publish
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# ─── Pre-parse --mind (needed before config load) ────────────────────────────
+
+MIND_NAME=""
+_NEXT_IS_MIND=false
+for _arg in "$@"; do
+  if $_NEXT_IS_MIND; then
+    MIND_NAME="$_arg"
+    _NEXT_IS_MIND=false
+    continue
+  fi
+  case "$_arg" in
+    --mind) _NEXT_IS_MIND=true ;;
+    --mind=*) MIND_NAME="${_arg#--mind=}" ;;
+  esac
+done
+unset _arg _NEXT_IS_MIND
+
 # ─── Load Config ────────────────────────────────────────────────────────────
 
-CONFIG_FILE="$SCRIPT_DIR/config.local.env"
-if [ ! -f "$CONFIG_FILE" ]; then
-  CONFIG_FILE="$SCRIPT_DIR/config.env"
-fi
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "ERROR: No config file found."
-  echo "Create runner/config.local.env with your settings (copy from config.env)."
-  exit 1
+if [ -n "$MIND_NAME" ]; then
+  CONFIG_FILE="$SCRIPT_DIR/config.${MIND_NAME}.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config found for mind '$MIND_NAME': $CONFIG_FILE"
+    echo "Create runner/config.${MIND_NAME}.env (copy from runner/config.env)."
+    exit 1
+  fi
+else
+  CONFIG_FILE="$SCRIPT_DIR/config.local.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    CONFIG_FILE="$SCRIPT_DIR/config.env"
+  fi
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config file found."
+    echo "Create runner/config.local.env with your settings (copy from config.env)."
+    echo "For a named mind: runner/config.<mind>.env and pass --mind <mind>."
+    exit 1
+  fi
 fi
 
 _EXT_NAME="${PROJECT_NAME:-}"
@@ -62,12 +90,20 @@ fi
 
 AUTO_PUBLISH=false
 POSITIONAL=()
+_SKIP_NEXT=false
 for arg in "$@"; do
+  if $_SKIP_NEXT; then
+    _SKIP_NEXT=false
+    continue
+  fi
   case "$arg" in
     --publish|--push) AUTO_PUBLISH=true ;;
+    --mind) _SKIP_NEXT=true ;;   # value already captured above
+    --mind=*) ;;                 # already captured above
     *) POSITIONAL+=("$arg") ;;
   esac
 done
+unset _SKIP_NEXT arg
 set -- "${POSITIONAL[@]+"${POSITIONAL[@]}"}"
 
 # ─── Session Type ────────────────────────────────────────────────────────────

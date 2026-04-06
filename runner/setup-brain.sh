@@ -5,22 +5,48 @@
 # Existing files are never overwritten — safe to re-run.
 #
 # Usage:
-#   ./runner/setup-brain.sh
+#   ./runner/setup-brain.sh                  # uses config.local.env
+#   ./runner/setup-brain.sh --mind nova      # uses config.nova.env
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# ─── Parse --mind ─────────────────────────────────────────────────────────────
+
+MIND_NAME=""
+_NEXT_IS_MIND=false
+for _arg in "$@"; do
+  if $_NEXT_IS_MIND; then
+    MIND_NAME="$_arg"
+    _NEXT_IS_MIND=false
+    continue
+  fi
+  case "$_arg" in
+    --mind)   _NEXT_IS_MIND=true ;;
+    --mind=*) MIND_NAME="${_arg#--mind=}" ;;
+  esac
+done
+unset _arg _NEXT_IS_MIND
+
 # ─── Load Config ─────────────────────────────────────────────────────────────
 
-CONFIG_FILE="$SCRIPT_DIR/config.local.env"
-[ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
-
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "ERROR: No config file found."
-  echo "Create runner/config.local.env with PROJECT_NAME set."
-  exit 1
+if [ -n "$MIND_NAME" ]; then
+  CONFIG_FILE="$SCRIPT_DIR/config.${MIND_NAME}.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config found for mind '$MIND_NAME': $CONFIG_FILE"
+    echo "Create runner/config.${MIND_NAME}.env (copy from runner/config.env)."
+    exit 1
+  fi
+else
+  CONFIG_FILE="$SCRIPT_DIR/config.local.env"
+  [ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config file found."
+    echo "Create runner/config.local.env, or pass --mind <name> to use config.<name>.env."
+    exit 1
+  fi
 fi
 
 _EXT_NAME="${PROJECT_NAME:-}"
@@ -90,8 +116,11 @@ python3 "$SCRIPT_DIR/scripts/update-about-meta.py" "$BRAIN_DIR" 2>/dev/null || t
 echo ""
 echo "Done. Brain initialized at: $BRAIN_DIR"
 echo ""
+MIND_ARG=""
+[ -n "$MIND_NAME" ] && MIND_ARG=" --mind $PROJECT_NAME"
+
 echo "Next steps:"
-echo "  Edit ${PROJECT_NAME}-brain/identity/identity.md   — define who ${PROJECT_NAME_CAP} is"
-echo "  Edit ${PROJECT_NAME}-brain/identity/voice.md      — define how she writes"
-echo "  Add content to ${PROJECT_NAME}-brain/inputs/      — articles, books, sayings, concepts"
-echo "  ./runner/wake.sh                                  — start the first session"
+echo "  Edit ${PROJECT_NAME}-brain/identity/identity.md      — define who ${PROJECT_NAME_CAP} is"
+echo "  Edit ${PROJECT_NAME}-brain/identity/voice.md         — define how she writes"
+echo "  Add content to ${PROJECT_NAME}-brain/inputs/         — articles, books, sayings, concepts"
+echo "  ./runner/wake.sh${MIND_ARG}                          — start the first session"

@@ -9,15 +9,26 @@ Marikai is the default instance. The framework is generic — any name works.
 
 ---
 
-## Project Name
+## Minds
 
-The name of the mind is controlled by `PROJECT_NAME` in `config.local.env`:
+Each mind has its own config file, brain directory, and optional publish site.
+The config file name determines which mind runs.
+
+### Config files
+
+| Situation | Config file | Command |
+| --- | --- | --- |
+| Single mind (default) | `runner/config.local.env` | `./runner/wake.sh` |
+| Named mind | `runner/config.<name>.env` | `./runner/wake.sh --mind <name>` |
+
+Without `--mind`, every script falls back to `config.local.env`.
+With `--mind nova`, every script loads `config.nova.env`.
+
+### What `PROJECT_NAME` drives
 
 ```bash
-PROJECT_NAME="marikai"   # default — change to anything: "nova", "echo", "sage", …
+PROJECT_NAME="nova"   # set inside the config file
 ```
-
-This single variable drives everything:
 
 | Variable | Derived from | Example |
 | --- | --- | --- |
@@ -27,25 +38,25 @@ This single variable drives everything:
 | Brain directory | `${PROJECT_NAME}-brain/` | `nova-brain/` |
 | Guide file | `${PROJECT_NAME_UPPER}.md` | `NOVA.md` |
 
-To start a new mind from scratch:
+### Spawning a new mind
 
 ```bash
-# 1. Set the name in your config
-echo 'PROJECT_NAME="nova"' >> runner/config.local.env
+# 1. Create a config file for the new mind
+cp runner/config.env runner/config.nova.env
+# Edit runner/config.nova.env — set PROJECT_NAME="nova", LOCATION, etc.
 
 # 2. Initialize the brain directory
-./runner/setup-brain.sh
+./runner/setup-brain.sh --mind nova
 
 # 3. Edit the identity files (these are yours to write)
 #    nova-brain/identity/identity.md  — who Nova is
 #    nova-brain/identity/voice.md     — how she writes
 
 # 4. Start the first session
-./runner/wake.sh
+./runner/wake.sh --mind nova
 ```
 
-An existing config with `PROJECT_NAME="marikai"` is unaffected — `wake.sh` and all other
-scripts read the name from the config file on every run.
+Each mind is fully independent. Running `--mind nova` never touches `marikai-brain/` and vice versa.
 
 ---
 
@@ -93,8 +104,9 @@ marikAI/
 │
 ├── runner/
 │   ├── wake.sh                 # Main session runner
-│   ├── config.env              # Config template (copy to config.local.env)
-│   ├── config.local.env        # Your actual config (gitignored)
+│   ├── config.env              # Config template (copy to config.local.env or config.<name>.env)
+│   ├── config.local.env        # Default config — loaded when no --mind flag (gitignored)
+│   ├── config.<name>.env       # Per-mind config — loaded with --mind <name> (gitignored)
 │   ├── setup-brain.sh          # Initializes the brain directory from scaffold
 │   ├── setup-cron.sh           # Installs cron schedule + poller
 │   ├── setup-publish.sh        # Initializes the publish repo with Jekyll scaffold
@@ -124,11 +136,19 @@ marikAI/
 
 ### 1. Configure
 
+For a single mind (the default):
+
 ```bash
 cp runner/config.env runner/config.local.env
 ```
 
-Edit `runner/config.local.env`:
+For a named mind (to run multiple minds in parallel):
+
+```bash
+cp runner/config.env runner/config.nova.env
+```
+
+Edit the config file — `config.local.env` for the default, `config.<name>.env` for a named mind:
 
 ```bash
 # Project name — drives directory names, prompts, and the guide file
@@ -162,11 +182,12 @@ PUBLISH_GIT_PUSH="false"         # push to remote after publishing
 ### 2. Initialize the brain directory
 
 ```bash
-./runner/setup-brain.sh
+./runner/setup-brain.sh              # default mind (config.local.env)
+./runner/setup-brain.sh --mind nova  # named mind (config.nova.env)
 ```
 
 This creates `{PROJECT_NAME}-brain/` from the scaffold in `runner/brain-scaffold/`,
-substituting the project name throughout. Existing files are never overwritten — safe to re-run.
+substituting the project name throughout. Existing files never get overwritten — safe to re-run.
 
 Then edit the identity files (the AI will flesh them out, but a starting point helps):
 
@@ -195,12 +216,13 @@ BRAIN_DIR={PROJECT_NAME}-brain runner/venv/bin/python3 runner/scripts/semantic-i
 ### 4. Run a session
 
 ```bash
-./runner/wake.sh                              # auto-detect from current time
-./runner/wake.sh "late afternoon"             # any phrase describing the time
-./runner/wake.sh "early morning" "Check on the essay you started"  # with a note
-./runner/wake.sh --publish                    # run session, then publish to site
-./runner/wake.sh "evening" --publish          # label + auto-publish
-./runner/wake.sh "morning" "Read the draft" --publish  # label + note + auto-publish
+./runner/wake.sh                                        # default mind, auto-detect time
+./runner/wake.sh --mind nova                            # named mind, auto-detect time
+./runner/wake.sh "late afternoon"                       # custom session label
+./runner/wake.sh --mind nova "late afternoon"           # named mind + label
+./runner/wake.sh "early morning" "Check on the essay"  # label + keeper note
+./runner/wake.sh --publish                              # run session, then publish
+./runner/wake.sh --mind nova "evening" --publish        # named mind + label + publish
 ```
 
 `--publish` (or `--push`) runs `publish.sh --push` automatically after all post-session processing completes — transcript, log, mood, semantic index, about.md metadata. It can appear anywhere in the argument list.
@@ -224,21 +246,25 @@ You can pass any free-form phrase instead — `"middle of the quiet night"`, `"j
 ### 5. Schedule with cron (optional)
 
 ```bash
-./runner/setup-cron.sh install               # 07:00, 13:00, 19:00, 23:00 daily — auto-publishes after each session
-./runner/setup-cron.sh install --no-publish  # same schedule, no auto-publish
-./runner/setup-cron.sh remove                # remove the schedule
-./runner/setup-cron.sh show                  # view current crontab
+./runner/setup-cron.sh install --mind nova              # 07:00, 13:00, 19:00, 23:00 daily
+./runner/setup-cron.sh install --mind nova --no-publish # same, no auto-publish
+./runner/setup-cron.sh remove  --mind nova              # remove nova's schedule only
+./runner/setup-cron.sh show                             # view full crontab
 ```
 
-By default, `install` adds `--publish` to each cron session so the site updates automatically.
-Use `--no-publish` if you prefer to publish manually.
+Without `--mind`, `install` and `remove` operate on the default mind (config.local.env).
+Each mind gets its own labelled block in the crontab — removing one mind's jobs leaves the others untouched.
 
-**Manual run and publish options** (always available regardless of cron setup):
+By default, `install` adds `--publish` to each cron session so the site updates automatically.
+Use `--no-publish` to publish manually instead.
+
+**Manual run and publish options** (always available regardless of cron):
 
 ```bash
-./runner/wake.sh                   # run a session, no publish
-./runner/wake.sh --publish         # run a session, then publish
-./runner/publish.sh --push         # publish only (no session)
+./runner/wake.sh                          # default mind, no publish
+./runner/wake.sh --mind nova              # named mind, no publish
+./runner/wake.sh --mind nova --publish    # named mind, then publish
+./runner/publish.sh --mind nova --push    # publish only (no session)
 ```
 
 ---
@@ -479,7 +505,8 @@ Create a new GitHub repository (e.g. `you/{PROJECT_NAME}`) and clone it locally.
 ### 2. Initialize it with the scaffold
 
 ```bash
-./runner/setup-publish.sh
+./runner/setup-publish.sh              # default mind
+./runner/setup-publish.sh --mind nova  # named mind
 ```
 
 This copies the Jekyll scaffold (`runner/publish-scaffold/`) into your publish repo,
@@ -487,7 +514,7 @@ substituting the project name throughout, without overwriting anything already t
 
 ### 3. Configure
 
-Set in `config.local.env`:
+Set in the mind's config file:
 
 ```bash
 PUBLISH_DIR="/path/to/your/publish-repo"
@@ -496,13 +523,14 @@ PUBLISH_GIT_PUSH="false"            # set to "true" to push automatically
 ```
 
 `PUBLISH_PATHS` controls what gets published (default: journal, creatives, essays, letters,
-about, sayings, concepts, keeper-prompts, session-log). Edit it to include or exclude directories.
+about, sayings, concepts, keeper-prompts, session-log). Edit it to include or exclude paths.
 
 ### 4. Publish
 
 ```bash
-./runner/publish.sh              # sync content + commit (no push)
-./runner/publish.sh --push       # sync + commit + push to remote
+./runner/publish.sh                       # default mind, sync + commit
+./runner/publish.sh --push                # default mind, sync + commit + push
+./runner/publish.sh --mind nova --push    # named mind, sync + commit + push
 ```
 
 The output directories (journal, creatives, essays, letters) contain pure markdown compatible

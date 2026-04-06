@@ -363,31 +363,51 @@ TOOL_DEFINITIONS = [
 
 def call_ollama(base_url: str, model: str, messages: list[dict],
                 tools: list[dict]) -> dict:
-    """Call the Ollama OpenAI-compatible chat completions endpoint."""
+    """Call the Ollama OpenAI-compatible chat completions endpoint.
+
+    Uses non-streaming (streaming + tools is broken for qwen3.5/aya-expanse in Ollama).
+    Uses http.client directly so we can set a connect timeout but no read timeout —
+    urllib's timeout fires on any slow recv(), which kills long generations.
+    """
+    import http.client
+    import urllib.parse
+    import socket
+
+    parsed = urllib.parse.urlparse(base_url.rstrip("/"))
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    path = parsed.path + "/chat/completions"
+
     payload = json.dumps({
         "model": model,
         "messages": messages,
         "tools": tools,
         "stream": False,
     }).encode()
-    req = urllib.request.Request(
-        f"{base_url.rstrip('/')}/chat/completions",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            return json.load(resp)
-    except urllib.error.URLError as e:
+        conn = http.client.HTTPConnection(host, port, timeout=10)  # connect timeout only
+        conn.connect()
+        conn.sock.settimeout(None)  # remove timeout after connect — no read timeout
+        conn.request("POST", path, body=payload,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        if resp.status != 200:
+            body = resp.read(512).decode("utf-8", errors="replace")
+            raise urllib.error.URLError(f"HTTP Error {resp.status}: {body}")
+        return json.loads(resp.read())
+    except (http.client.HTTPException, OSError) as e:
         sys.stderr.write(f"Ollama API error: {e}\n")
-        raise
+        raise urllib.error.URLError(e)
 
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
 def dispatch_tool(name: str, inp: dict, add_dir: str | None,
                   langsearch_key: str | None) -> str:
+    # Some models (e.g. aya-expanse) wrap args as {"tool_name": "...", "parameters": {...}}
+    if "parameters" in inp and isinstance(inp["parameters"], dict):
+        inp = inp["parameters"]
     try:
         if name == "Read":
             return tool_read(inp["file_path"], inp.get("offset"), inp.get("limit"))
