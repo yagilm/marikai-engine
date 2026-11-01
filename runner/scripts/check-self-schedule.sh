@@ -56,8 +56,19 @@ HISTORY_FILE="$BRAIN_DIR/data/self-schedule-history.jsonl"
 # Exit if no schedule pending
 [ -f "$SCHEDULE_FILE" ] || exit 0
 
+# ─── Mind arguments ───────────────────────────────────────────────────────────
+# The default mind must not pass --mind: it has no config.<name>.env file.
+
+if [ -n "$MIND_NAME" ]; then
+  WAKE_MIND_ARGS=(--mind "$MIND_NAME")
+  WAKE_RUNNING_PATTERN="wake.sh --mind $MIND_NAME"
+else
+  WAKE_MIND_ARGS=()
+  WAKE_RUNNING_PATTERN="wake.sh "
+fi
+
 # Don't fire if a session for this mind is already running
-if pgrep -f "wake.sh --mind $PROJECT_NAME" > /dev/null 2>&1; then
+if pgrep -f "$WAKE_RUNNING_PATTERN" > /dev/null 2>&1; then
   exit 0
 fi
 
@@ -78,4 +89,4 @@ printf '{"date":"%s","wake_at":"%s","reason":"%s","fired_at":"%s"}\n' \
 
 rm -f "$SCHEDULE_FILE"
 
-exec "$RUNNER_DIR/wake.sh" --mind "$PROJECT_NAME" self "$REASON"
+exec "$RUNNER_DIR/wake.sh" "${WAKE_MIND_ARGS[@]+"${WAKE_MIND_ARGS[@]}"}" self "$REASON"

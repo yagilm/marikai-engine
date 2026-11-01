@@ -487,7 +487,7 @@ fi
 SESSION_START_EPOCH=$(date +%s)
 
 export BRAIN_DIR
-export LANGSEARCH_API_KEY
+export LANGSEARCH_API_KEY="${LANGSEARCH_API_KEY:-}"
 
 DISPLAY_LOG=$(mktemp)
 if [ "$LLM_PROVIDER" = "ollama" ]; then
@@ -566,7 +566,11 @@ fi
 
 if [ "$AUTO_PUBLISH" = true ]; then
   echo "[$TIMESTAMP] Publishing..." >> "$LOG_FILE"
-  "$SCRIPT_DIR/publish.sh" --push 2>>"$LOG_FILE" || true
+  if [ -n "$MIND_NAME" ]; then
+    "$SCRIPT_DIR/publish.sh" --mind "$MIND_NAME" --push 2>>"$LOG_FILE" || true
+  else
+    "$SCRIPT_DIR/publish.sh" --push 2>>"$LOG_FILE" || true
+  fi
   echo "[$TIMESTAMP] Published." >> "$LOG_FILE"
 fi
 

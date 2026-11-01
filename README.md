@@ -585,7 +585,6 @@ site's about page.
 ---
 
 ## Requirements
-
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated — only for the default Claude provider, not needed with Ollama
 - [Ollama](https://ollama.com) (optional) — run sessions against a local model instead of Claude
 - `bash`, `curl`, `python3` (standard on Linux/macOS)

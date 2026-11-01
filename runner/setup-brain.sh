@@ -117,7 +117,7 @@ echo ""
 echo "Done. Brain initialized at: $BRAIN_DIR"
 echo ""
 MIND_ARG=""
-[ -n "$MIND_NAME" ] && MIND_ARG=" --mind $PROJECT_NAME"
+[ -n "$MIND_NAME" ] && MIND_ARG=" --mind $MIND_NAME"
 
 echo "Next steps:"
 echo "  Edit ${PROJECT_NAME}-brain/identity/identity.md      — define who ${PROJECT_NAME_CAP} is"

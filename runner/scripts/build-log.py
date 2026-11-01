@@ -64,8 +64,10 @@ def load_sessions_index() -> dict[str, dict]:
     return index
 
 
-def parse_transcript(path: Path) -> tuple[datetime | None, str, str, int | None, str]:
-    """Return (datetime, final_response_text, duration_s, session_id, date_str)."""
+def parse_transcript(
+    path: Path,
+) -> tuple[datetime | None, str, str, int | None, str, str]:
+    """Return (datetime, final_response_text, session_output, duration_s, session_id, date_str)."""
     raw = path.read_text(encoding="utf-8")
 
     # Extract frontmatter fields

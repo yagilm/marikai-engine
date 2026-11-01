@@ -56,13 +56,36 @@ _EXT_NAME="${PROJECT_NAME:-}"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
 
-# The flag to embed in cron commands (always explicit so removal is unambiguous)
-MIND_FLAG="--mind $PROJECT_NAME"
+# Only named minds get an explicit --mind flag. The default mind loads
+# config.local.env, so passing --mind <name> would look for a config file
+# that does not exist.
+if [ -n "$MIND_NAME" ]; then
+  MIND_FLAG="--mind $MIND_NAME"
+else
+  MIND_FLAG=""
+fi
 
 # ─── Ensure scripts are executable ───────────────────────────────────────────
 
 [ -x "$WAKE_SCRIPT" ]      || chmod +x "$WAKE_SCRIPT"
 [ -x "$SELF_SCHED_SCRIPT" ] || chmod +x "$SELF_SCHED_SCRIPT"
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+# Print the current crontab with only this mind's jobs removed.
+# Default-mind jobs have no --mind flag, while named-mind jobs do.
+filter_crontab() {
+  awk -v wake="$WAKE_SCRIPT" -v self="$SELF_SCHED_SCRIPT" -v mind="$MIND_NAME" '
+    {
+      if (index($0, wake) == 0 && index($0, self) == 0) { print; next }
+      if (mind != "") {
+        if (match($0, "--mind[= ]" mind "([ \t]|$)")) next
+        print; next
+      }
+      if (index($0, "--mind ") == 0 && index($0, "--mind=") == 0) next
+      print
+    }'
+}
 
 # ─── Actions ─────────────────────────────────────────────────────────────────
 
@@ -73,10 +96,7 @@ case "$ACTION" in
     LOG="$SCRIPT_DIR/../${PROJECT_NAME}-brain/logs/cron.log"
 
     # Remove any existing cron jobs for this mind before re-adding
-    crontab -l 2>/dev/null \
-      | grep -v "$WAKE_SCRIPT $MIND_FLAG" \
-      | grep -v "$SELF_SCHED_SCRIPT $MIND_FLAG" \
-      | crontab - 2>/dev/null || true
+    crontab -l 2>/dev/null | filter_crontab | crontab - 2>/dev/null || true
 
     (crontab -l 2>/dev/null; cat <<EOF
 # $PROJECT_NAME — scheduled sessions
@@ -97,10 +117,7 @@ EOF
 
   remove)
     echo "Removing $PROJECT_NAME cron jobs..."
-    crontab -l 2>/dev/null \
-      | grep -v "$WAKE_SCRIPT $MIND_FLAG" \
-      | grep -v "$SELF_SCHED_SCRIPT $MIND_FLAG" \
-      | crontab - 2>/dev/null || true
+    crontab -l 2>/dev/null | filter_crontab | crontab - 2>/dev/null || true
     echo "Done."
     ;;
 
