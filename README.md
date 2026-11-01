@@ -157,8 +157,13 @@ PROJECT_NAME="marikai"           # change to any single lowercase word
 # Required
 LOCATION="Athens, Greece"       # location for weather
 
+# LLM provider
+LLM_PROVIDER="claude"            # "claude" (default) or "ollama" (local)
+MODEL="claude-opus-4-6"         # Claude model to use (LLM_PROVIDER=claude)
+OLLAMA_MODEL="llama3.1"         # Ollama model (LLM_PROVIDER=ollama; needs tool support)
+OLLAMA_BASE_URL="http://localhost:11434/v1"  # Ollama OpenAI-compatible endpoint
+
 # Session
-MODEL="claude-opus-4-6"         # Claude model to use
 MAX_TURNS="50"                   # maximum turns per session
 GIT_COMMIT="false"               # auto-commit {PROJECT_NAME}-brain/ after each session
 INPUT_MIN="1"                    # minimum inputs the AI reads per session
@@ -266,6 +271,46 @@ Use `--no-publish` to publish manually instead.
 ./runner/wake.sh --mind nova --publish    # named mind, then publish
 ./runner/publish.sh --mind nova --push    # publish only (no session)
 ```
+
+### 6. Run locally with Ollama (optional)
+
+Marikai can run against a local Ollama model instead of Claude. This avoids API
+costs, but it is slower and requires a model with tool-use support.
+
+1. Install [Ollama](https://ollama.com) and pull a tool-capable model:
+
+```bash
+ollama pull llama3.1
+```
+
+2. Set the provider in your config:
+
+```bash
+LLM_PROVIDER="ollama"
+OLLAMA_MODEL="llama3.1"
+OLLAMA_BASE_URL="http://localhost:11434/v1"
+```
+
+3. Run sessions as usual:
+
+```bash
+./runner/wake.sh                                  # default mind
+./runner/wake.sh --mind nova "afternoon"          # named mind
+```
+
+Ollama is reached through its OpenAI-compatible API (`/v1`) by
+`runner/scripts/ollama-session.py`, which uses only the Python standard library.
+When `LLM_PROVIDER="ollama"`, the Claude Code CLI is not needed.
+
+Notes:
+
+- Pick a model that supports tool calling — for example `llama3.1`, `llama3.2`,
+  `mistral-nemo`, or `qwen2.5`. Models without tool support cannot read or write
+  files or run commands.
+- Lower `MAX_TURNS` on slower hardware (for example `10`–`20`); each local turn
+  can take several seconds.
+- Each mind can use a different provider — set `LLM_PROVIDER` independently in
+  `config.<name>.env`.
 
 ---
 
@@ -540,8 +585,8 @@ site's about page.
 ---
 
 ## Requirements
-
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- `bash`, `curl`, `jq`, `python3` (standard on Linux/macOS; install `jq` with your package manager)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated — only for the default Claude provider, not needed with Ollama
+- [Ollama](https://ollama.com) (optional) — run sessions against a local model instead of Claude
+- `bash`, `curl`, `python3` (standard on Linux/macOS)
 - Internet access (for weather, URL reading, and web search)
 - `trafilatura` (optional Python package — improves web page extraction quality)
