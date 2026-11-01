@@ -542,6 +542,6 @@ site's about page.
 ## Requirements
 
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- `bash`, `curl`, `python3` (standard on Linux/macOS)
+- `bash`, `curl`, `jq`, `python3` (standard on Linux/macOS; install `jq` with your package manager)
 - Internet access (for weather, URL reading, and web search)
 - `trafilatura` (optional Python package — improves web page extraction quality)

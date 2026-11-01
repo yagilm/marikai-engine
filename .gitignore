@@ -10,6 +10,10 @@ archives/
 # Session output (large, transient)
 *-brain/data/last-session-output.jsonl
 
+# Python
+__pycache__/
+*.py[cod]
+
 # OS
 .DS_Store
 Thumbs.db
