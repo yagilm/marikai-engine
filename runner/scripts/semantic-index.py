@@ -5,7 +5,9 @@ Covers: journal/, essays/, creatives/, letters/
 Chunks each file into overlapping passages, embeds with sentence-transformers,
 stores index in data/semantic-index/.
 
-Incremental by default — only processes files not already in the index.
+Incremental by default. New files are embedded without touching existing
+vectors; if an indexed document was edited, deleted, or predates content
+hashing, the whole index is rebuilt so it cannot go stale.
 
 Usage:
     python3 semantic-index.py           # build/update (incremental)
@@ -15,6 +17,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -38,7 +41,12 @@ def strip_frontmatter(text: str) -> str:
     return re.sub(r"^---\s*\n.*?\n---\s*\n", "", text, flags=re.DOTALL).strip()
 
 
-def chunk_text(text: str, source: str, file_date: str, doc_type: str) -> list[dict]:
+def doc_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def chunk_text(text: str, source: str, file_date: str, doc_type: str,
+               content_hash: str = "") -> list[dict]:
     body = strip_frontmatter(text)
     if not body:
         return []
@@ -52,6 +60,7 @@ def chunk_text(text: str, source: str, file_date: str, doc_type: str) -> list[di
             "source": source,
             "date": file_date,
             "type": doc_type,
+            "doc_hash": content_hash,
             "text": snippet,
         })
     return chunks
@@ -116,23 +125,63 @@ def main() -> None:
         )
         sys.exit(1)
 
+    documents = collect_documents()
+    current_sources = {
+        str(path.relative_to(_BRAIN_DIR)): (path, doc_type)
+        for path, doc_type in documents
+    }
+
+    # The index and its chunk metadata must always travel together.
+    have_index = INDEX_FILE.exists() and CHUNKS_FILE.exists()
+    if not have_index:
+        rebuild = True
     existing_chunks = [] if rebuild else load_chunks()
-    existing_sources = {c["source"] for c in existing_chunks}
+
+    # Hash of every document currently represented in the index.
+    indexed_hashes: dict[str, set[str]] = {}
+    for chunk in existing_chunks:
+        source = chunk.get("source", "")
+        if source:
+            indexed_hashes.setdefault(source, set()).add(chunk.get("doc_hash", ""))
+
+    # Adding vectors is cheap; removing/updating them is not. If any indexed
+    # document changed or disappeared (or has no hash from an older index),
+    # rebuild the whole index so it never serves stale passages.
+    if existing_chunks:
+        for source, hashes in indexed_hashes.items():
+            if source not in current_sources:
+                rebuild = True
+                break
+            path, _ = current_sources[source]
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if hashes != {doc_hash(text)}:
+                rebuild = True
+                break
+
+    if rebuild:
+        existing_chunks = []
+        existing_sources: set[str] = set()
+    else:
+        existing_sources = set(indexed_hashes)
 
     new_chunks: list[dict] = []
     new_doc_count = 0
-    for path, doc_type in collect_documents():
-        rel = str(path.relative_to(_BRAIN_DIR))
-        if rel in existing_sources and not rebuild:
+    for rel, (path, doc_type) in current_sources.items():
+        if rel in existing_sources:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        chunks = chunk_text(text, rel, extract_date(path), doc_type)
+        chunks = chunk_text(text, rel, extract_date(path), doc_type, doc_hash(text))
         if chunks:
             new_chunks.extend(chunks)
             new_doc_count += 1
 
     if not new_chunks:
-        print(f"Index up to date — {len(existing_chunks)} chunks.", file=sys.stderr)
+        if rebuild:
+            INDEX_FILE.unlink(missing_ok=True)
+            CHUNKS_FILE.unlink(missing_ok=True)
+            print("No documents to index — removed stale index.", file=sys.stderr)
+        else:
+            print(f"Index up to date — {len(existing_chunks)} chunks.", file=sys.stderr)
         return
 
     print(

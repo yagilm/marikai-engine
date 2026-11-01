@@ -5,16 +5,42 @@
 # It copies the scaffold files without overwriting anything already there.
 #
 # Usage:
-#   ./runner/setup-publish.sh
+#   ./runner/setup-publish.sh               # uses config.local.env
+#   ./runner/setup-publish.sh --mind nova   # uses config.nova.env
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ─── Parse --mind ─────────────────────────────────────────────────────────────
+
+MIND_NAME=""
+_NEXT_IS_MIND=false
+for _arg in "$@"; do
+  if $_NEXT_IS_MIND; then
+    MIND_NAME="$_arg"
+    _NEXT_IS_MIND=false
+    continue
+  fi
+  case "$_arg" in
+    --mind)   _NEXT_IS_MIND=true ;;
+    --mind=*) MIND_NAME="${_arg#--mind=}" ;;
+  esac
+done
+unset _arg _NEXT_IS_MIND
+
 # ─── Load Config ─────────────────────────────────────────────────────────────
 
-CONFIG_FILE="$SCRIPT_DIR/config.local.env"
-[ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
+if [ -n "$MIND_NAME" ]; then
+  CONFIG_FILE="$SCRIPT_DIR/config.${MIND_NAME}.env"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ERROR: No config found for mind '$MIND_NAME': $CONFIG_FILE"
+    exit 1
+  fi
+else
+  CONFIG_FILE="$SCRIPT_DIR/config.local.env"
+  [ -f "$CONFIG_FILE" ] || CONFIG_FILE="$SCRIPT_DIR/config.env"
+fi
 
 _EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
@@ -25,13 +51,13 @@ PUBLISH_DIR="${PUBLISH_DIR:-}"
 PUBLISH_BASEURL="${PUBLISH_BASEURL:-}"
 
 if [ -z "$PUBLISH_DIR" ]; then
-  echo "ERROR: PUBLISH_DIR is not set in config.local.env"
+  echo "ERROR: PUBLISH_DIR is not set in $(basename "$CONFIG_FILE")"
   echo ""
   echo "Steps to set up a publish repo:"
   echo "  1. Create a GitHub repository (e.g. github.com/you/${PROJECT_NAME})"
   echo "  2. Enable GitHub Pages: Settings → Pages → Deploy from branch → main / root"
   echo "  3. Clone it locally: git clone git@github.com:you/${PROJECT_NAME}.git ~/${PROJECT_NAME}-site"
-  echo "  4. Add to config.local.env: PUBLISH_DIR=\"\$HOME/${PROJECT_NAME}-site\""
+  echo "  4. Add to $(basename "$CONFIG_FILE"): PUBLISH_DIR=\"\$HOME/${PROJECT_NAME}-site\""
   echo "  5. Run this script again."
   exit 1
 fi
