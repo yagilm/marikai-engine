@@ -383,6 +383,7 @@ def call_ollama(base_url: str, model: str, messages: list[dict],
         "messages": messages,
         "tools": tools,
         "stream": False,
+        "tool_choice": "auto",
     }).encode()
 
     try:
@@ -460,9 +461,10 @@ def run(args: argparse.Namespace) -> None:
     if args.add_dir:
         system_content += f"\n\nYour primary working directory is: {args.add_dir}"
 
+    brain_path = getattr(args, 'add_dir', None) or '/home/manos/personal/code/llm-persistance/marikAI/marikai-brain'
     messages: list[dict] = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": args.prompt},
+        {"role": "system", "content": system_content + f"\n\nYour primary working directory is: {brain_path}. You MUST use tools to read and write files. Follow ALL steps in MARIKAI.md exactly."},
+        {"role": "user", "content": args.prompt + f"\n\nBrain dir: {brain_path}. You must read MARIKAI.md, memory/memory.md, identity/identity.md, identity/voice.md with Read tool. Then create journal/YYYY-MM-DD-HHMM.md with Write tool, create essay/creative with Write tool, write letter with Write tool, update memory/memory.md with Write/Edit tool, write prompt/prompt.md with Write tool before ending."},
     ]
 
     langsearch_key = os.environ.get("LANGSEARCH_API_KEY")
@@ -491,6 +493,25 @@ def run(args: argparse.Namespace) -> None:
             emit_assistant_text(text_content)
             final_text = text_content
 
+        # Try to parse tool calls from content if not in tool_calls array
+        if not tool_calls and text_content:
+            try:
+                import re
+                for match in re.finditer(r'\{(?:[^{}]|\{[^{}]*\})*\}', text_content):
+                    try:
+                        obj = json.loads(match.group())
+                        if isinstance(obj, dict) and obj.get('name') and obj.get('arguments') is not None:
+                            tool_calls.append({
+                                "id": f"call_{uuid.uuid4().hex[:8]}",
+                                "function": {"name": obj['name'], "arguments": json.dumps(obj['arguments']) if isinstance(obj['arguments'], dict) else str(obj['arguments'])}
+                            })
+                            text_content = text_content.replace(match.group(), '').strip()
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
         # Emit tool calls
         for tc in tool_calls:
             tc_id = tc.get("id", f"call_{uuid.uuid4().hex[:8]}")
@@ -508,10 +529,17 @@ def run(args: argparse.Namespace) -> None:
             assistant_msg["content"] = text_content
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
+            if not text_content:
+                assistant_msg["content"] = None
         messages.append(assistant_msg)
 
-        # No tool calls → done
+        # No tool calls → done, but try to be more aggressive
         if not tool_calls:
+            # If it's early in the session and no tools used, try to prompt for tools
+            if num_turns < 2 and args.add_dir:
+                brain_path = args.add_dir
+                messages.append({"role": "user", "content": f"Please use tools. Read {brain_path}/MARIKAI.md now with Read tool."})
+                continue
             break
 
         # Execute tools and add results
