@@ -44,6 +44,11 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+try:  # PyYAML matches the check publish uses; structural checks still work without it.
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
+
 # ── Stream-json emitters ──────────────────────────────────────────────────────
 
 def _emit(event: dict) -> None:
@@ -622,6 +627,14 @@ def dispatch_tool(name: str, inp: dict, add_dir: str | None,
 
 MIN_ESSAY_WORDS = 500
 
+# Jekyll collections and the field their listings rely on.
+COLLECTION_FIELDS = {
+    "journal": "date",
+    "creatives": "date",
+    "essays": "date",
+    "letters": "written_on",
+}
+
 
 def _is_essay_path(path: str) -> bool:
     """True when a written file lives in an ``essays/`` directory."""
@@ -629,6 +642,60 @@ def _is_essay_path(path: str) -> bool:
         return False
     normalised = "/" + path.replace("\\", "/").lstrip("/")
     return "/essays/" in normalised
+
+
+def _collection_for(path: str) -> str | None:
+    """Return the collection name (journal, essays, …) for a file path."""
+    normalised = "/" + path.replace("\\", "/").lstrip("/")
+    for name in COLLECTION_FIELDS:
+        if f"/{name}/" in normalised:
+            return name
+    return None
+
+
+def _path_key(path: str, add_dir: str | None) -> str:
+    """Normalise a tool path so repeat writes update the same entry."""
+    clean = path.replace("\\", "/")
+    if add_dir and not clean.startswith("/"):
+        clean = os.path.join(add_dir, clean)
+    return os.path.normpath(clean)
+
+
+def _front_matter_problem(path: str, content: str) -> str | None:
+    """Return why a collection file's front matter is unusable, or ``None``."""
+    collection = _collection_for(path)
+    if collection is None:
+        return None
+
+    text = content.lstrip("\ufeff").lstrip("\r\n")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return "missing opening ---"
+
+    closing = next(
+        (i for i, line in enumerate(lines[1:], start=1) if line.strip() == "---"),
+        None,
+    )
+    if closing is None:
+        return "missing closing ---"
+
+    block = "\n".join(lines[1:closing])
+    if not re.search(r"^[A-Za-z_][A-Za-z0-9_.-]*\s*:", block, re.MULTILINE):
+        return "front matter has no key: value entries"
+    required = COLLECTION_FIELDS[collection]
+    if not re.search(rf"^{re.escape(required)}\s*:\s*\S", block, re.MULTILINE):
+        return f"missing required '{required}:' field"
+
+    if yaml is not None:
+        try:
+            data = yaml.safe_load(block)
+        except Exception as exc:
+            return f"invalid YAML: {exc}"
+        if not isinstance(data, dict):
+            return "front matter is not a YAML mapping"
+        if data.get(required) in (None, ""):
+            return f"empty '{required}:' field"
+    return None
 
 
 SYSTEM_PROMPT = """\
@@ -667,6 +734,9 @@ def run(args: argparse.Namespace) -> None:
         f"Then do the session. Write {essay_clause}a creative piece, "
         "a journal entry (200+ words), and a letter.\n"
         "Use the Write tool for each file, with the complete text as the `content` argument. "
+        "Every file in journal/, creatives/, essays/, and letters/ must start with YAML "
+        "front matter between lines containing only `---` (date: for journal, creatives, "
+        "essays; written_on: for letters).\n"
         "Write full prose in paragraphs — not a note about the piece, not a single sentence."
     )
     messages: list[dict] = [
@@ -680,8 +750,11 @@ def run(args: argparse.Namespace) -> None:
     subtype = "success"
     essay_nudges = 0
     general_nudges = 0
+    front_matter_nudges = 0
     # Word counts of everything actually written through the Write tool this session.
     write_stats: list[tuple[str, int]] = []
+    # Collection files whose on-disk front matter is unusable, keyed by path.
+    front_matter_issues: dict[str, tuple[str, str]] = {}
 
     for turn in range(args.max_turns):
         num_turns = turn + 1
@@ -785,6 +858,26 @@ def run(args: argparse.Namespace) -> None:
                 messages.append({"role": "user", "content": correction})
                 continue
 
+            if front_matter_issues and front_matter_nudges < 2:
+                front_matter_nudges += 1
+                details = "\n".join(
+                    f"- {path}: {problem}"
+                    for path, problem in sorted(front_matter_issues.values())
+                )
+                correction = (
+                    "Some files cannot be published because their YAML front matter "
+                    "is missing or invalid:\n"
+                    f"{details}\n"
+                    "Rewrite each of those files with the Write tool, keeping the text, "
+                    "so that it begins with a line containing only `---`, then the "
+                    "required field (`date: YYYY-MM-DD` for journal, creatives and "
+                    "essays; `written_on: YYYY-MM-DD` for letters), then a line "
+                    "containing only `---`, and then the body. Do not describe the "
+                    "fix — call Write."
+                )
+                messages.append({"role": "user", "content": correction})
+                continue
+
             wrote_enough = any(words >= 150 for _, words in write_stats)
             if general_nudges < 2 and not wrote_enough:
                 general_nudges += 1
@@ -817,9 +910,24 @@ def run(args: argparse.Namespace) -> None:
                 except json.JSONDecodeError:
                     tool_input = {}
             result = dispatch_tool(tool_name, tool_input, args.add_dir, langsearch_key)
+            file_path = tool_input.get("file_path") or ""
             if tool_name == "Write":
                 content = tool_input.get("content") or ""
-                write_stats.append((tool_input.get("file_path", ""), len(content.split())))
+                write_stats.append((file_path, len(content.split())))
+            # Validate collection files as they now exist on disk. Checking the
+            # file rather than the Write argument means a repair made with Edit
+            # also clears the issue.
+            if tool_name in ("Write", "Edit") and _collection_for(file_path):
+                key = _path_key(file_path, args.add_dir)
+                try:
+                    on_disk = Path(key).read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    on_disk = None
+                problem = _front_matter_problem(file_path, on_disk) if on_disk is not None else None
+                if problem:
+                    front_matter_issues[key] = (file_path, problem)
+                else:
+                    front_matter_issues.pop(key, None)
             emit_user_tool_result(tc_id, result)
             tool_results.append({
                 "role": "tool",

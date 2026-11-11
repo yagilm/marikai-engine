@@ -366,6 +366,10 @@ Notes:
   explicitly and the local runner nudges the model if it tries to finish without
   a substantial essay in `essays/`. Set it to `false` only if you intentionally
   want sessions without essays.
+- The local runner also validates the front matter of every journal, creative,
+  essay, and letter it writes. Files without an opening/closing `---`, without
+  the required `date:`/`written_on:`, or with invalid YAML are sent back to the
+  model for repair, so publishing does not abort on malformed content.
 - Lower `MAX_TURNS` on slower hardware (for example `10`–`20`); each local turn
   can take several seconds. Leave enough turns for the essay nudge to succeed.
 - Each mind can use a different provider — set `LLM_PROVIDER` independently in

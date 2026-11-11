@@ -451,7 +451,15 @@ fi
 
 # ─── Required writing ────────────────────────────────────────────────────────
 
-REQUIRED_WRITING_SECTION=""
+REQUIRED_WRITING_SECTION="## Required Writing This Session
+
+Write these with the Write tool before you finish:
+
+1. A **journal entry** in \`journal/YYYY-MM-DD-HHMM.md\`.
+2. A **creative piece** in \`creatives/YYYY-MM-DD-slug.md\`.
+
+Every file in \`journal/\`, \`creatives/\`, \`essays/\`, and \`letters/\` must begin with YAML front matter between lines containing only \`---\`. Journal, creative, and essay files need a \`date: YYYY-MM-DD\` field; letters need \`written_on: YYYY-MM-DD\`."
+
 if [ "$REQUIRE_ESSAY" = "true" ]; then
   REQUIRED_WRITING_SECTION="## Required Writing This Session
 
@@ -460,6 +468,8 @@ Write all of these with the Write tool before you finish:
 1. An **essay** in \`essays/YYYY-MM-DD-slug.md\` — at least 800 words of your own thinking, with \`date\`, \`title\`, and \`topic\` front matter.
 2. A **creative piece** in \`creatives/YYYY-MM-DD-slug.md\`.
 3. A **journal entry** in \`journal/YYYY-MM-DD-HHMM.md\`.
+
+Every file in \`journal/\`, \`creatives/\`, \`essays/\`, and \`letters/\` must begin with YAML front matter between lines containing only \`---\`. Journal, creative, and essay files need a \`date: YYYY-MM-DD\` field; letters need \`written_on: YYYY-MM-DD\`.
 
 The essay is required every session. Do not substitute a creative piece for it, and do not stop before it is written."
 fi
