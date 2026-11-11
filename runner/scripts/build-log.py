@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a combined session log from transcript Final Response sections.
 
-Reads all *-transcript.md files from marikai-brain/logs/,
+Reads all *-transcript.md files from the brain's logs/ directory,
 extracts the ## Final Response section from each,
 and writes a single log.md sorted newest-first.
 
@@ -9,21 +9,25 @@ Duration is read from the transcript frontmatter (duration_s field) if present,
 with fallback to sessions.jsonl for older transcripts that predate the field.
 
 Usage:
-    python3 build-log.py            # writes to marikai-brain/data/session-log.md
+    python3 build-log.py            # writes to <brain>/data/session-log.md
     python3 build-log.py --out /path/to/log.md
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir
+
+_BRAIN_DIR = brain_dir()
 
 LOGS_DIR = _BRAIN_DIR / "logs"
 DEFAULT_OUT = _BRAIN_DIR / "data" / "session-log.md"
@@ -101,7 +105,7 @@ def parse_transcript(
         except ValueError:
             pass
 
-    # Extract Session Output section (text Marikai wrote during the session)
+    # Extract Session Output section (text the mind wrote during the session)
     session_output = ""
     match = re.search(r"^##\s+Session Output\s*\n(.*?)(?=^##\s|\Z)", raw, re.MULTILINE | re.DOTALL)
     if match:

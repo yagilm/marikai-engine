@@ -25,8 +25,13 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir, display_name
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir, display_name
+
+_BRAIN_DIR = brain_dir()
 LOG_FILE = _BRAIN_DIR / "logs" / "web.log"
 
 API_URL = "https://api.langsearch.com/v1/web-search"
@@ -78,7 +83,7 @@ def search(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "User-Agent": os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0",
+            "User-Agent": display_name() + "/1.0",
         },
     )
 
@@ -100,7 +105,7 @@ def search(
 
 
 def format_results(query: str, results: list[dict[str, str]]) -> str:
-    """Format results as readable text for Marikai."""
+    """Format results as readable text for the mind."""
     lines = [f"Search: {query}", f"Results: {len(results)}", "=" * 60, ""]
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['title']}")

@@ -153,7 +153,7 @@ Edit the config file — `config.local.env` for the default, `config.<name>.env`
 
 ```bash
 # Project name — drives directory names, prompts, and the guide file
-PROJECT_NAME="marikai"           # change to any single lowercase word
+PROJECT_NAME="nova"              # required — any single lowercase word
 
 # Required
 LOCATION="Athens, Greece"       # location for weather
@@ -185,10 +185,14 @@ SEMANTIC_VENV=""                 # path to venv with sentence-transformers+faiss
 
 # Publishing
 PUBLISH_DIR=""                   # path to your publish git repo (leave empty to disable)
-PUBLISH_BASEURL="/marikai"       # GitHub Pages base path (e.g. "" for username.github.io)
+PUBLISH_BASEURL="/nova"          # GitHub Pages base path (e.g. "" for username.github.io)
 PUBLISH_PATHS="journal creatives essays letters identity/about.md inputs/sayings.md inputs/concepts.md inputs/keeper-prompts.md data/session-log.md"
 PUBLISH_GIT_PUSH="false"         # push to remote after publishing
 ```
+
+`PROJECT_NAME` is required. The runners refuse to start without it rather than
+assuming a default name; everything else (brain directory, guide file, prompts)
+is derived from it.
 
 ### 2. Initialize the brain directory
 

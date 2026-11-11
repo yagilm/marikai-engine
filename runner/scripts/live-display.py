@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live display for Marikai sessions.
+"""Live display for the mind's sessions.
 
 Reads stream-json from stdin, writes raw lines to the stream file,
 and pretty-prints a human-readable view to the terminal in real time.

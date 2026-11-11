@@ -13,6 +13,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+try:  # Same directory when run as a script.
+    from mind import guide_file
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import guide_file
+
 # Brain dir is passed via environment so paths stay portable
 _BRAIN_DIR: str = os.environ.get("BRAIN_DIR", "")
 _BRAIN_PREFIX: str = _BRAIN_DIR.rstrip("/") + "/" if _BRAIN_DIR else ""
@@ -24,7 +30,7 @@ FILTERED_READ_PREFIXES: tuple[str, ...] = tuple(
     p for p in (
         _BRAIN_PREFIX + "memory/",
         _BRAIN_PREFIX + "prompt/",
-        _BRAIN_PREFIX + "MARIKAI.md",
+        _BRAIN_PREFIX + guide_file(),
     )
     if p.strip("/")
 )

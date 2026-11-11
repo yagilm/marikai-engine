@@ -15,13 +15,17 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 import sys
 from datetime import date
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir
+
+_BRAIN_DIR = brain_dir()
 
 INDEX_DIR   = _BRAIN_DIR / "data" / "semantic-index"
 INDEX_FILE  = INDEX_DIR / "index.faiss"

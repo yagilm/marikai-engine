@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build or update a semantic FAISS index over Marikai's past writing.
+"""Build or update a semantic FAISS index over the mind's past writing.
 
 Covers: journal/, essays/, creatives/, letters/
 Chunks each file into overlapping passages, embeds with sentence-transformers,
@@ -19,13 +19,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir
+
+_BRAIN_DIR = brain_dir()
 
 INDEX_DIR = _BRAIN_DIR / "data" / "semantic-index"
 INDEX_FILE = INDEX_DIR / "index.faiss"

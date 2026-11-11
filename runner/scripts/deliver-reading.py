@@ -2,8 +2,8 @@
 """Pick a reading for the current session.
 
 Selects from two pools:
-  1. File readings: marikai-brain/inputs/readings/*.md
-  2. URL readings:  marikai-brain/inputs/readings-urls.md
+  1. File readings: <brain>/inputs/readings/*.md
+  2. URL readings:  <brain>/inputs/readings-urls.md
 
 Preference order:
   - Unread items (file or URL) come first
@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
 import sys
 import urllib.request
@@ -35,8 +34,13 @@ except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from url_tracker import log_attempt
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir, display_name
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir, display_name
+
+_BRAIN_DIR = brain_dir()
 
 READINGS_DIR = _BRAIN_DIR / "inputs" / "readings"
 READINGS_URLS_FILE = _BRAIN_DIR / "inputs" / "readings-urls.md"
@@ -141,7 +145,7 @@ def fetch_url(url: str) -> str:
     """Fetch a URL and return clean readable text (stdlib only)."""
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; " + os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0)"},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; " + display_name() + "/1.0)"},
     )
     with urllib.request.urlopen(req, timeout=12) as resp:
         raw = resp.read().decode("utf-8", errors="replace")

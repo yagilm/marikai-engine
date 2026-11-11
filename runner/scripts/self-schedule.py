@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-scheduling for Marikai.
+"""Self-scheduling for the mind.
 
 Schedule extra wake sessions outside the 4 cron slots.
 
@@ -16,13 +16,18 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR", Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir, display_name
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir, display_name
+
+_BRAIN_DIR = brain_dir()
 SCHEDULE_FILE = _BRAIN_DIR / "data" / "self-schedule.json"
 HISTORY_FILE = _BRAIN_DIR / "data" / "self-schedule-history.jsonl"
 
@@ -193,7 +198,7 @@ def main() -> int:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
     parser = argparse.ArgumentParser(
-        description="Schedule an extra Marikai wake session outside the 4 cron slots."
+        description=f"Schedule an extra {display_name()} wake session outside the 4 cron slots."
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--at", metavar="HH:MM", help="Schedule at a specific time (local)")

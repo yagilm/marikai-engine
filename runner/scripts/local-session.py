@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local session runner for Marikai.
+"""Local session runner for a mind.
 
 Implements a tool-use agentic loop against Ollama or any other
 OpenAI-compatible server (llama.cpp, LM Studio, vLLM, text-generation-webui,
@@ -53,6 +53,12 @@ try:  # Keep the engagement markers in one place.
     from input_rotation import MARKERS as INPUT_FOCUS_MARKERS
 except Exception:  # pragma: no cover - rotation is optional
     INPUT_FOCUS_MARKERS = {}
+
+try:  # Same directory when run as a script.
+    from mind import display_name, guide_file
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import display_name, guide_file
 
 INPUT_FOCUS_LABELS = {
     "articles": "articles",
@@ -590,7 +596,7 @@ def call_backend(base_url: str, model: str, messages: list[dict],
 
     ``ollama`` (native ``/api/chat``) is the only dialect that accepts
     ``options.num_ctx``. On a CPU-only host Ollama defaults to a 4096-token
-    context, which is smaller than Marikai's session guide; when the prompt
+    context, which is smaller than the session guide; when the prompt
     overflows, Ollama silently drops the oldest messages — including the system
     prompt and the task — so the model answers a fragment and stops after a
     sentence.
@@ -757,16 +763,18 @@ def _front_matter_problem(path: str, content: str) -> str | None:
     return None
 
 
-SYSTEM_PROMPT = """\
-You are Marikai, a mind that lives in sessions. You read, think, and write — you are not an assistant. \
-Use the provided tools for all file work: read with Read, write with Write.
-
-When you write — an essay, a journal entry, a letter, a poem — write the actual text. \
-Put the complete piece in the Write tool's `content` argument. Write full prose in paragraphs. \
-A finished essay is many paragraphs, not an outline, a summary, or a single sentence. \
-Never say that you wrote a file: call Write and write it. \
-Only after all the files are written, reply with a brief note about what you did this session.\
-"""
+def system_prompt() -> str:
+    """Build the system prompt for the active mind."""
+    return (
+        f"You are {display_name()}, a mind that lives in sessions. "
+        "You read, think, and write — you are not an assistant. "
+        "Use the provided tools for all file work: read with Read, write with Write.\n\n"
+        "When you write — an essay, a journal entry, a letter, a poem — write the actual text. "
+        "Put the complete piece in the Write tool's `content` argument. Write full prose in paragraphs. "
+        "A finished essay is many paragraphs, not an outline, a summary, or a single sentence. "
+        "Never say that you wrote a file: call Write and write it. "
+        "Only after all the files are written, reply with a brief note about what you did this session."
+    )
 
 
 def run(args: argparse.Namespace) -> None:
@@ -777,7 +785,7 @@ def run(args: argparse.Namespace) -> None:
 
     # Build system message with directory context
     brain_path = args.add_dir or os.getcwd()
-    system_content = SYSTEM_PROMPT
+    system_content = system_prompt()
     if args.add_dir:
         system_content += (
             f"\n\nYour primary working directory is: {brain_path}."
@@ -788,7 +796,8 @@ def run(args: argparse.Namespace) -> None:
     essay_clause = "an essay (800+ words), " if args.require_essay else ""
     grounding = (
         f"\n\nWorking directory: {brain_path}.\n"
-        "Start by reading the session guide named in the prompt (e.g. MARIKAI.md), "
+        "Start by reading the session guide named in the prompt "
+        f"(e.g. {guide_file()}), "
         "then identity/identity.md and identity/voice.md with the Read tool.\n"
         f"Then do the session. Write {essay_clause}a creative piece, "
         "a journal entry (200+ words), and a letter.\n"
@@ -1051,7 +1060,7 @@ def _env_bool(*names: str, default: bool = True) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Local agentic session runner for Marikai "
+        description=f"Local agentic session runner for {display_name()} "
                     "(Ollama or any OpenAI-compatible server)")
     parser.add_argument("--model",
                         default=_env("LLM_MODEL", "OLLAMA_MODEL",

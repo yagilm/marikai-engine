@@ -136,7 +136,7 @@ while IFS= read -r line; do
   fi
 done < "$INPUT_FILE"
 
-# Extract text blocks Marikai output during the session, excluding the last
+# Extract text blocks the mind output during the session, excluding the last
 # (the last text block is identical to the Final Response result)
 TEXT_OUTPUT=$(jq -rs '[
   .[] |

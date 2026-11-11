@@ -50,8 +50,14 @@ fi
 _EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
-PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-}}"
+if [ -z "$PROJECT_NAME" ]; then
+  echo "ERROR: PROJECT_NAME is not set in $CONFIG_FILE." >&2
+  echo "Set PROJECT_NAME to this mind's name (a single lowercase word)." >&2
+  exit 1
+fi
 BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
+export PROJECT_NAME BRAIN_DIR
 
 PUBLISH_DIR="${PUBLISH_DIR:-}"
 PUBLISH_GIT_PUSH="${PUBLISH_GIT_PUSH:-false}"
@@ -179,7 +185,7 @@ done
 # _config.yml defaults (layout/title) to documents that have front matter;
 # without it they are copied as static files and the header links serve raw
 # Markdown. Add a minimal block to the published copies (not the brain files,
-# which Marikai edits as data).
+# which the mind edits as data).
 
 IO_PAGES=()
 for rel_path in inputs/sayings.md inputs/concepts.md inputs/keeper-prompts.md; do

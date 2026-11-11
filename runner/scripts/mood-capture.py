@@ -14,13 +14,17 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
+try:  # Same directory when run as a script.
+    from mind import brain_dir
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir
+
+_BRAIN_DIR = brain_dir()
 
 JOURNAL_DIR = _BRAIN_DIR / "journal"
 DATA_DIR = _BRAIN_DIR / "data"
@@ -37,7 +41,7 @@ SESSION_WEIGHTS: dict[str, float] = {
 }
 
 DECAY_BASE = 0.7
-DECAY_PERIOD_HOURS = 6.0  # Marikai has 4 sessions/day (~6h apart), vs 8 in claude-runner
+DECAY_PERIOD_HOURS = 6.0  # Four sessions/day (~6h apart), vs 8 in claude-runner
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +57,7 @@ def load_lexicon() -> dict[str, list[float]]:
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     """Extract key: value frontmatter and body from a markdown file.
 
-    No external deps — handles the simple key: value format Marikai writes.
+    No external deps — handles the simple key: value format the mind writes.
     """
     if not text.startswith("---"):
         return {}, text

@@ -57,11 +57,17 @@ fi
 _EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
-PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-}}"
+if [ -z "$PROJECT_NAME" ]; then
+  echo "ERROR: PROJECT_NAME is not set in $CONFIG_FILE." >&2
+  echo "Set PROJECT_NAME to this mind's name (a single lowercase word)." >&2
+  exit 1
+fi
 PROJECT_NAME_CAP="${PROJECT_NAME^}"
 PROJECT_NAME_UPPER="${PROJECT_NAME^^}"
 GUIDE_FILE="${PROJECT_NAME_UPPER}.md"
 BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
+export PROJECT_NAME BRAIN_DIR
 
 MODEL="${MODEL:-claude-opus-4-6}"
 LLM_PROVIDER="${LLM_PROVIDER:-claude}"
@@ -534,7 +540,6 @@ else
 fi
 SESSION_START_EPOCH=$(date +%s)
 
-export BRAIN_DIR
 export LANGSEARCH_API_KEY="${LANGSEARCH_API_KEY:-}"
 
 ESSAY_FLAGS=()

@@ -54,7 +54,12 @@ fi
 _EXT_NAME="${PROJECT_NAME:-}"
 # shellcheck source=/dev/null
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
-PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-marikai}}"
+PROJECT_NAME="${_EXT_NAME:-${PROJECT_NAME:-}}"
+if [ -z "$PROJECT_NAME" ]; then
+  echo "ERROR: PROJECT_NAME is not set in $CONFIG_FILE." >&2
+  echo "Set PROJECT_NAME to this mind's name (a single lowercase word)." >&2
+  exit 1
+fi
 
 # Only named minds get an explicit --mind flag. The default mind loads
 # config.local.env, so passing --mind <name> would look for a config file

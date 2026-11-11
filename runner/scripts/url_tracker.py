@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime
@@ -37,13 +36,11 @@ _META_RE = re.compile(
 )
 
 
-def brain_dir() -> Path:
-    """Return the brain directory, honouring ``BRAIN_DIR``."""
-    configured = os.environ.get("BRAIN_DIR")
-    if configured:
-        return Path(configured)
-    project_name = os.environ.get("PROJECT_NAME", "marikai")
-    return Path(__file__).resolve().parent.parent.parent / f"{project_name}-brain"
+try:  # Same directory when run as a script.
+    from mind import brain_dir
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mind import brain_dir
 
 
 def urls_file() -> Path:
