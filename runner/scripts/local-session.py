@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
-"""Ollama session runner for Marikai.
+"""Local session runner for Marikai.
 
-Implements a tool-use agentic loop against any Ollama-hosted model,
-outputting claude-compatible stream-json so live-display.py, process-transcript.sh,
-and extract-log-entry.py all work unchanged.
+Implements a tool-use agentic loop against Ollama or any other
+OpenAI-compatible server (llama.cpp, LM Studio, vLLM, text-generation-webui,
+...), outputting claude-compatible stream-json so live-display.py,
+process-transcript.sh, and extract-log-entry.py all work unchanged.
+
+Two API dialects are supported:
+
+* Ollama native (/api/chat) — lets us set ``options.num_ctx`` per request.
+* OpenAI-compatible (/v1/chat/completions) — used by llama.cpp and friends;
+  the context size is configured on the server instead.
 
 Usage (mirrors the claude CLI flags wake.sh uses):
-    python3 ollama-session.py \
-        --model llama3.1 \
+    python3 local-session.py \
+        --model qwen3.5:4b \
         --max-turns 30 \
         --add-dir /path/to/brain \
-        --base-url http://localhost:11434/v1 \
+        --base-url http://localhost:11434 \
+        -p "wake prompt text"
+
+    # llama.cpp / LM Studio / vLLM
+    python3 local-session.py \
+        --model local-model \
+        --base-url http://localhost:8080/v1 \
+        --api-style openai \
         -p "wake prompt text"
 """
 
@@ -25,6 +39,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -359,47 +374,209 @@ TOOL_DEFINITIONS = [
 ]
 
 
-# ── Ollama API call ───────────────────────────────────────────────────────────
+# ── Backend API call (Ollama native or OpenAI-compatible) ────────────────────
 
-def call_ollama(base_url: str, model: str, messages: list[dict],
-                tools: list[dict]) -> dict:
-    """Call the Ollama OpenAI-compatible chat completions endpoint.
+def _resolve_api_style(base_url: str, api_style: str) -> str:
+    """Return ``"ollama"`` or ``"openai"`` for the configured endpoint.
 
-    Uses non-streaming (streaming + tools is broken for qwen3.5/aya-expanse in Ollama).
-    Uses http.client directly so we can set a connect timeout but no read timeout —
-    urllib's timeout fires on any slow recv(), which kills long generations.
+    * ``ollama`` — Ollama's native ``/api/chat`` endpoint.
+    * ``openai`` — an OpenAI-compatible ``/chat/completions`` endpoint, as
+      implemented by llama.cpp, LM Studio, vLLM, text-generation-webui, etc.
+
+    ``auto`` (the default) treats port 11434 or an ``/api`` path as Ollama, and
+    a ``/v1`` path as OpenAI-compatible. Anything else falls back to Ollama,
+    which matches the historical behaviour.
+    """
+    style = (api_style or "auto").strip().lower()
+    if style in ("ollama", "openai"):
+        return style
+
+    parsed = urllib.parse.urlparse(base_url.rstrip("/"))
+    path = (parsed.path or "").rstrip("/").lower()
+    if parsed.port == 11434 or path.endswith("/api") or "/api/" in path:
+        return "ollama"
+    if "/v1" in path:
+        return "openai"
+    return "ollama"
+
+
+def _ollama_chat_path(base_url: str) -> str:
+    """Turn a configured base URL into Ollama's native ``/api/chat`` path.
+
+    Accepts both ``http://host:11434`` and the OpenAI-compatible
+    ``http://host:11434/v1`` form.
+    """
+    parsed = urllib.parse.urlparse(base_url.rstrip("/"))
+    path = parsed.path or ""
+    for suffix in ("/api/chat", "/v1", "/api"):
+        if path.endswith(suffix):
+            path = path[: -len(suffix)]
+    return path + "/api/chat"
+
+
+def _openai_chat_path(base_url: str) -> str:
+    """Turn a configured base URL into a ``/chat/completions`` path.
+
+    Accepts ``http://host:8080``, ``http://host:8080/v1`` and an already
+    complete ``http://host:8080/v1/chat/completions``.
+    """
+    parsed = urllib.parse.urlparse(base_url.rstrip("/"))
+    path = (parsed.path or "").rstrip("/")
+    if path.endswith("/chat/completions"):
+        return path
+    if path.endswith("/v1"):
+        return path + "/chat/completions"
+    return path + "/v1/chat/completions"
+
+
+def _normalise_tool_calls(raw_calls: list) -> list[dict]:
+    """Return tool calls in one internal shape, with arguments as dicts."""
+    normalised = []
+    for tc in raw_calls or []:
+        if not isinstance(tc, dict):
+            continue
+        fn = tc.get("function", {}) or {}
+        tool_args = fn.get("arguments")
+        if isinstance(tool_args, str):
+            try:
+                tool_args = json.loads(tool_args)
+            except (json.JSONDecodeError, TypeError):
+                tool_args = {}
+        if not isinstance(tool_args, dict):
+            tool_args = {}
+        normalised.append({
+            "id": tc.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+            "type": "function",
+            "function": {"name": fn.get("name", ""), "arguments": tool_args},
+        })
+    return normalised
+
+
+def _openai_messages(messages: list[dict]) -> list[dict]:
+    """Convert internal messages to the OpenAI wire format.
+
+    Internally (and in Ollama's native API) tool-call arguments are objects;
+    the OpenAI-compatible protocol expects them as JSON *strings*.
+    """
+    converted = []
+    for msg in messages:
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            copied = dict(msg)
+            copied["tool_calls"] = [
+                {
+                    "id": tc.get("id", ""),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("function", {}).get("name", ""),
+                        "arguments": json.dumps(
+                            tc.get("function", {}).get("arguments") or {},
+                            ensure_ascii=False),
+                    },
+                }
+                for tc in msg["tool_calls"]
+            ]
+            converted.append(copied)
+        else:
+            converted.append(msg)
+    return converted
+
+
+def _post_json(base_url: str, path: str, body: dict,
+               api_key: str | None) -> dict:
+    """POST ``body`` as JSON and return the decoded response.
+
+    Uses http.client directly so we can set a connect timeout but no read
+    timeout — urllib's timeout fires on any slow recv(), which kills long
+    generations.
     """
     import http.client
-    import urllib.parse
-    import socket
 
     parsed = urllib.parse.urlparse(base_url.rstrip("/"))
     host = parsed.hostname
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    path = parsed.path + "/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
-    payload = json.dumps({
-        "model": model,
-        "messages": messages,
-        "tools": tools,
-        "stream": False,
-        "tool_choice": "auto",
-    }).encode()
-
+    payload = json.dumps(body).encode()
+    conn_cls = (http.client.HTTPSConnection if parsed.scheme == "https"
+                else http.client.HTTPConnection)
     try:
-        conn = http.client.HTTPConnection(host, port, timeout=10)  # connect timeout only
+        conn = conn_cls(host, port, timeout=10)  # connect timeout only
         conn.connect()
         conn.sock.settimeout(None)  # remove timeout after connect — no read timeout
-        conn.request("POST", path, body=payload,
-                     headers={"Content-Type": "application/json"})
+        conn.request("POST", path, body=payload, headers=headers)
         resp = conn.getresponse()
         if resp.status != 200:
-            body = resp.read(512).decode("utf-8", errors="replace")
-            raise urllib.error.URLError(f"HTTP Error {resp.status}: {body}")
+            detail = resp.read(512).decode("utf-8", errors="replace")
+            raise urllib.error.URLError(f"HTTP Error {resp.status}: {detail}")
         return json.loads(resp.read())
     except (http.client.HTTPException, OSError) as e:
-        sys.stderr.write(f"Ollama API error: {e}\n")
+        sys.stderr.write(f"Backend API error: {e}\n")
         raise urllib.error.URLError(e)
+
+
+def call_backend(base_url: str, model: str, messages: list[dict],
+                 tools: list[dict], api_style: str, api_key: str | None,
+                 num_ctx: int, num_predict: int) -> dict:
+    """Call the configured local backend and return a normalised response.
+
+    Returns ``{"content": str, "tool_calls": [{"id", "function": {"name",
+    "arguments"}}], "done_reason": str}`` regardless of the dialect.
+
+    ``ollama`` (native ``/api/chat``) is the only dialect that accepts
+    ``options.num_ctx``. On a CPU-only host Ollama defaults to a 4096-token
+    context, which is smaller than Marikai's session guide; when the prompt
+    overflows, Ollama silently drops the oldest messages — including the system
+    prompt and the task — so the model answers a fragment and stops after a
+    sentence.
+
+    ``openai`` (``/chat/completions``) is what llama.cpp, LM Studio, vLLM and
+    other OpenAI-compatible servers expose. Those servers take the context size
+    from their own start-up flags/environment, not from the request.
+
+    Non-streaming is used in both cases (streaming + tools is broken for some
+    Ollama models)."""
+    style = _resolve_api_style(base_url, api_style)
+
+    if style == "ollama":
+        response = _post_json(base_url, _ollama_chat_path(base_url), {
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": False,
+            "options": {
+                "num_ctx": num_ctx,
+                "num_predict": num_predict,
+            },
+        }, api_key)
+        # Native shape:
+        #   {"message": {"content", "tool_calls"}, "done_reason": "stop", ...}
+        msg = response.get("message", {}) or {}
+        return {
+            "content": msg.get("content") or "",
+            "tool_calls": _normalise_tool_calls(msg.get("tool_calls") or []),
+            "done_reason": response.get("done_reason", "stop"),
+        }
+
+    body: dict = {
+        "model": model,
+        "messages": _openai_messages(messages),
+        "tools": tools,
+        "stream": False,
+    }
+    if num_predict and num_predict > 0:
+        body["max_tokens"] = num_predict
+    response = _post_json(base_url, _openai_chat_path(base_url), body, api_key)
+    # OpenAI shape:
+    #   {"choices": [{"message": {"content", "tool_calls"}, "finish_reason": ...}]}
+    choice = (response.get("choices") or [{}])[0]
+    msg = choice.get("message", {}) or {}
+    return {
+        "content": msg.get("content") or "",
+        "tool_calls": _normalise_tool_calls(msg.get("tool_calls") or []),
+        "done_reason": choice.get("finish_reason") or "stop",
+    }
 
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
@@ -444,9 +621,14 @@ def dispatch_tool(name: str, inp: dict, add_dir: str | None,
 # ── Main agentic loop ─────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are an AI assistant with direct access to the local filesystem. \
-Use the provided tools to read, write, and modify files, run commands, and search through directories. \
-Think step by step. After completing all your work, write a brief summary of what you did this session.\
+You are Marikai, a mind that lives in sessions. You read, think, and write — you are not an assistant. \
+Use the provided tools for all file work: read with Read, write with Write.
+
+When you write — an essay, a journal entry, a letter, a poem — write the actual text. \
+Put the complete piece in the Write tool's `content` argument. Write full prose in paragraphs. \
+A finished essay is many paragraphs, not an outline, a summary, or a single sentence. \
+Never say that you wrote a file: call Write and write it. \
+Only after all the files are written, reply with a brief note about what you did this session.\
 """
 
 
@@ -457,71 +639,90 @@ def run(args: argparse.Namespace) -> None:
     emit_system(session_id)
 
     # Build system message with directory context
+    brain_path = args.add_dir or os.getcwd()
     system_content = SYSTEM_PROMPT
     if args.add_dir:
-        system_content += f"\n\nYour primary working directory is: {args.add_dir}"
+        system_content += (
+            f"\n\nYour primary working directory is: {brain_path}."
+            " Use the tools to read and write files, and follow the session guide"
+            " in the prompt exactly."
+        )
 
-    brain_path = getattr(args, 'add_dir', None) or '/home/manos/personal/code/llm-persistance/marikAI/marikai-brain'
+    grounding = (
+        f"\n\nWorking directory: {brain_path}.\n"
+        "Start by reading the session guide named in the prompt (e.g. MARIKAI.md), "
+        "then identity/identity.md and identity/voice.md with the Read tool.\n"
+        "Then do the session. Write at least one substantial piece (essay or creative, 800+ words), "
+        "a journal entry (200+ words), and a letter.\n"
+        "Use the Write tool for each file, with the complete text as the `content` argument. "
+        "Write full prose in paragraphs — not a note about the piece, not a single sentence."
+    )
     messages: list[dict] = [
-        {"role": "system", "content": system_content + f"\n\nYour primary working directory is: {brain_path}. You MUST use tools to read and write files. Follow ALL steps in MARIKAI.md exactly."},
-        {"role": "user", "content": args.prompt + f"\n\nBrain dir: {brain_path}. You must read MARIKAI.md, memory/memory.md, identity/identity.md, identity/voice.md with Read tool. Then create journal/YYYY-MM-DD-HHMM.md with Write tool, create essay/creative with Write tool, write letter with Write tool, update memory/memory.md with Write/Edit tool, write prompt/prompt.md with Write tool before ending."},
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": args.prompt + grounding},
     ]
 
     langsearch_key = os.environ.get("LANGSEARCH_API_KEY")
     num_turns = 0
     final_text = ""
     subtype = "success"
+    nudges = 0
+    # Word counts of everything actually written through the Write tool this session.
+    write_stats: list[tuple[str, int]] = []
 
     for turn in range(args.max_turns):
         num_turns = turn + 1
 
         try:
-            response = call_ollama(args.base_url, args.model, messages, TOOL_DEFINITIONS)
+            response = call_backend(
+                args.base_url, args.model, messages, TOOL_DEFINITIONS,
+                args.api_style, args.api_key, args.num_ctx, args.num_predict)
         except Exception as e:
             sys.stderr.write(f"Fatal API error on turn {num_turns}: {e}\n")
             subtype = "error_api"
             break
 
-        choice = response.get("choices", [{}])[0]
-        msg = choice.get("message", {})
-        finish_reason = choice.get("finish_reason", "stop")
-        text_content = msg.get("content") or ""
-        tool_calls = msg.get("tool_calls") or []
+        # Both dialects are normalised by call_backend() into:
+        #   {"content": str, "tool_calls": [...], "done_reason": str}
+        text_content = response.get("content") or ""
+        done_reason = response.get("done_reason", "stop")
+        tool_calls = response.get("tool_calls") or []
 
         # Emit text if present
         if text_content:
             emit_assistant_text(text_content)
             final_text = text_content
 
-        # Try to parse tool calls from content if not in tool_calls array
+        # Some models (e.g. qwen2.5-coder) emit the tool call as plain-text JSON
+        # instead of filling the tool_calls field. Parse it out.
         if not tool_calls and text_content:
-            try:
-                import re
-                for match in re.finditer(r'\{(?:[^{}]|\{[^{}]*\})*\}', text_content):
+            for match in re.finditer(r'\{(?:[^{}]|\{[^{}]*\})*\}', text_content):
+                try:
+                    obj = json.loads(match.group())
+                except Exception:
+                    continue
+                if not (isinstance(obj, dict) and obj.get("name")
+                        and obj.get("arguments") is not None):
+                    continue
+                tool_args = obj["arguments"]
+                if isinstance(tool_args, str):
                     try:
-                        obj = json.loads(match.group())
-                        if isinstance(obj, dict) and obj.get('name') and obj.get('arguments') is not None:
-                            tool_calls.append({
-                                "id": f"call_{uuid.uuid4().hex[:8]}",
-                                "function": {"name": obj['name'], "arguments": json.dumps(obj['arguments']) if isinstance(obj['arguments'], dict) else str(obj['arguments'])}
-                            })
-                            text_content = text_content.replace(match.group(), '').strip()
-                            break
+                        tool_args = json.loads(tool_args)
                     except Exception:
-                        continue
-            except Exception:
-                pass
+                        pass
+                tool_calls.append({
+                    "id": f"call_{uuid.uuid4().hex[:8]}",
+                    "type": "function",
+                    "function": {"name": obj["name"], "arguments": tool_args},
+                })
+                text_content = text_content.replace(match.group(), "").strip()
+                break
 
         # Emit tool calls
         for tc in tool_calls:
-            tc_id = tc.get("id", f"call_{uuid.uuid4().hex[:8]}")
             fn = tc.get("function", {})
-            tool_name = fn.get("name", "")
-            try:
-                tool_input = json.loads(fn.get("arguments", "{}"))
-            except json.JSONDecodeError:
-                tool_input = {}
-            emit_assistant_tool(tool_name, tc_id, tool_input)
+            emit_assistant_tool(fn.get("name", ""), tc["id"],
+                                fn.get("arguments") or {})
 
         # Add assistant turn to messages
         assistant_msg: dict = {"role": "assistant"}
@@ -530,15 +731,34 @@ def run(args: argparse.Namespace) -> None:
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
             if not text_content:
-                assistant_msg["content"] = None
+                assistant_msg["content"] = ""
         messages.append(assistant_msg)
 
-        # No tool calls → done, but try to be more aggressive
+        # No tool calls → the model thinks it is done. Verify that it actually
+        # wrote something substantial; small local models often narrate the task
+        # ("I wrote the essay") without ever calling Write, or write one line.
         if not tool_calls:
-            # If it's early in the session and no tools used, try to prompt for tools
+            # If it's early in the session and no tools used, nudge it to start.
             if num_turns < 2 and args.add_dir:
-                brain_path = args.add_dir
-                messages.append({"role": "user", "content": f"Please use tools. Read {brain_path}/MARIKAI.md now with Read tool."})
+                messages.append({"role": "user", "content": f"Please use tools. Read the session guide in {args.add_dir} now with the Read tool."})
+                continue
+
+            wrote_enough = any(words >= 150 for _, words in write_stats)
+            if nudges < 2 and not wrote_enough:
+                nudges += 1
+                if not write_stats:
+                    correction = (
+                        "You have not written any files yet. Do not describe the task and do not "
+                        "say you wrote something — call the Write tool NOW. Put the complete text of "
+                        "the session's main piece in the `content` argument, as full prose in many paragraphs."
+                    )
+                else:
+                    correction = (
+                        "The file you wrote is too short. Rewrite it with the Write tool as a full piece: "
+                        "many paragraphs of prose, at least 800 words. Do not summarise and do not write a "
+                        "single sentence. Put the complete text in the `content` argument."
+                    )
+                messages.append({"role": "user", "content": correction})
                 continue
             break
 
@@ -548,11 +768,16 @@ def run(args: argparse.Namespace) -> None:
             tc_id = tc.get("id", "")
             fn = tc.get("function", {})
             tool_name = fn.get("name", "")
-            try:
-                tool_input = json.loads(fn.get("arguments", "{}"))
-            except json.JSONDecodeError:
-                tool_input = {}
+            tool_input = fn.get("arguments") or {}
+            if isinstance(tool_input, str):
+                try:
+                    tool_input = json.loads(tool_input)
+                except json.JSONDecodeError:
+                    tool_input = {}
             result = dispatch_tool(tool_name, tool_input, args.add_dir, langsearch_key)
+            if tool_name == "Write":
+                content = tool_input.get("content") or ""
+                write_stats.append((tool_input.get("file_path", ""), len(content.split())))
             emit_user_tool_result(tc_id, result)
             tool_results.append({
                 "role": "tool",
@@ -562,7 +787,7 @@ def run(args: argparse.Namespace) -> None:
 
         messages.extend(tool_results)
 
-        if finish_reason == "stop" and not tool_calls:
+        if done_reason == "stop" and not tool_calls:
             break
     else:
         # Hit max_turns
@@ -574,16 +799,53 @@ def run(args: argparse.Namespace) -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+def _env(*names: str, default: str | None = None) -> str | None:
+    """Return the first non-empty environment variable among ``names``."""
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return default
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ollama agentic session runner for Marikai")
-    parser.add_argument("--model", default="llama3.1",
-                        help="Ollama model name (default: llama3.1)")
+    parser = argparse.ArgumentParser(
+        description="Local agentic session runner for Marikai "
+                    "(Ollama or any OpenAI-compatible server)")
+    parser.add_argument("--model",
+                        default=_env("LLM_MODEL", "OLLAMA_MODEL",
+                                     default="qwen3.5:4b"),
+                        help="Model name (default: qwen3.5:4b)")
     parser.add_argument("--max-turns", type=int, default=50,
                         help="Maximum agentic turns (default: 50)")
     parser.add_argument("--add-dir", default=None,
                         help="Primary working directory (brain dir)")
-    parser.add_argument("--base-url", default="http://localhost:11434/v1",
-                        help="Ollama base URL (default: http://localhost:11434/v1)")
+    parser.add_argument("--base-url",
+                        default=_env("LLM_BASE_URL", "OLLAMA_BASE_URL",
+                                     default="http://localhost:11434"),
+                        help="Base URL of Ollama or any OpenAI-compatible "
+                             "server (default: http://localhost:11434)")
+    parser.add_argument("--api-style", choices=("auto", "ollama", "openai"),
+                        default=_env("LLM_API_STYLE", "OLLAMA_API_STYLE",
+                                     default="auto"),
+                        help="API dialect: 'ollama' for native /api/chat, "
+                             "'openai' for /v1/chat/completions, or 'auto' to "
+                             "detect from the base URL (default: auto)")
+    parser.add_argument("--api-key",
+                        default=_env("LLM_API_KEY", "OLLAMA_API_KEY"),
+                        help="Bearer token for endpoints that require one")
+    parser.add_argument("--num-ctx", type=int,
+                        default=int(_env("LLM_NUM_CTX", "OLLAMA_NUM_CTX",
+                                         default="32768")),
+                        help="Context window in tokens (default: 32768). Only "
+                             "sent to Ollama's native endpoint; OpenAI-compatible "
+                             "servers set their context at start-up. Must be large "
+                             "enough for the guide + files read + the writing.")
+    parser.add_argument("--num-predict", type=int,
+                        default=int(_env("LLM_NUM_PREDICT", "OLLAMA_NUM_PREDICT",
+                                         default="-1")),
+                        help="Maximum tokens to generate (-1 = no limit; sent "
+                             "as max_tokens to OpenAI-compatible servers)")
     parser.add_argument("-p", "--prompt", required=True,
                         help="Initial prompt / wake message")
     # Accept (and ignore) unknown flags for compatibility with wake.sh

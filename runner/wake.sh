@@ -65,8 +65,16 @@ BRAIN_DIR="$PROJECT_DIR/${PROJECT_NAME}-brain"
 
 MODEL="${MODEL:-claude-opus-4-6}"
 LLM_PROVIDER="${LLM_PROVIDER:-claude}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1}"
-OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434/v1}"
+# Local / OpenAI-compatible backend. The names are not Ollama-specific: the
+# same settings work for Ollama, llama.cpp, LM Studio, vLLM, text-generation-webui
+# and anything else that speaks one of the two supported dialects. The
+# OLLAMA_* aliases are also accepted as fallbacks.
+LLM_MODEL="${LLM_MODEL:-${OLLAMA_MODEL:-qwen3.5:4b}}"
+LLM_BASE_URL="${LLM_BASE_URL:-${OLLAMA_BASE_URL:-http://localhost:11434}}"
+LLM_API_STYLE="${LLM_API_STYLE:-${OLLAMA_API_STYLE:-auto}}"
+LLM_API_KEY="${LLM_API_KEY:-${OLLAMA_API_KEY:-}}"
+LLM_NUM_CTX="${LLM_NUM_CTX:-${OLLAMA_NUM_CTX:-32768}}"
+LLM_NUM_PREDICT="${LLM_NUM_PREDICT:-${OLLAMA_NUM_PREDICT:--1}}"
 MAX_TURNS="${MAX_TURNS:-50}"
 LOCATION="${LOCATION:-Athens, Greece}"
 GIT_COMMIT="${GIT_COMMIT:-false}"
@@ -479,9 +487,11 @@ Then begin. You have full read and write access to this directory."
 STREAM_FILE="$BRAIN_DIR/data/last-session-stream.jsonl"
 TRANSCRIPT_FILE="$BRAIN_DIR/logs/${DATE}-${TIME_COMPACT}-transcript.md"
 
-if [ "$LLM_PROVIDER" = "ollama" ]; then
-  echo "[$TIMESTAMP] Starting session (provider: ollama, model: $OLLAMA_MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
+if [ "$LLM_PROVIDER" = "ollama" ] || [ "$LLM_PROVIDER" = "openai" ] || [ "$LLM_PROVIDER" = "local" ]; then
+  USE_LOCAL_BACKEND=true
+  echo "[$TIMESTAMP] Starting session (provider: $LLM_PROVIDER, api: $LLM_API_STYLE, model: $LLM_MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
 else
+  USE_LOCAL_BACKEND=false
   echo "[$TIMESTAMP] Starting session (provider: claude, model: $MODEL, max-turns: $MAX_TURNS)" >> "$LOG_FILE"
 fi
 SESSION_START_EPOCH=$(date +%s)
@@ -490,12 +500,16 @@ export BRAIN_DIR
 export LANGSEARCH_API_KEY="${LANGSEARCH_API_KEY:-}"
 
 DISPLAY_LOG=$(mktemp)
-if [ "$LLM_PROVIDER" = "ollama" ]; then
-  python3 "$SCRIPT_DIR/scripts/ollama-session.py" \
-    --model "$OLLAMA_MODEL" \
+if [ "$USE_LOCAL_BACKEND" = true ]; then
+  python3 "$SCRIPT_DIR/scripts/local-session.py" \
+    --model "$LLM_MODEL" \
     --max-turns "$MAX_TURNS" \
     --add-dir "$BRAIN_DIR" \
-    --base-url "$OLLAMA_BASE_URL" \
+    --base-url "$LLM_BASE_URL" \
+    --api-style "$LLM_API_STYLE" \
+    --api-key "$LLM_API_KEY" \
+    --num-ctx "$LLM_NUM_CTX" \
+    --num-predict "$LLM_NUM_PREDICT" \
     -p "$WAKE_PROMPT" \
     2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
 else

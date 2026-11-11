@@ -158,10 +158,14 @@ PROJECT_NAME="marikai"           # change to any single lowercase word
 LOCATION="Athens, Greece"       # location for weather
 
 # LLM provider
-LLM_PROVIDER="claude"            # "claude" (default) or "ollama" (local)
+LLM_PROVIDER="claude"            # "claude" (default), or "ollama"/"openai"/"local"
 MODEL="claude-opus-4-6"         # Claude model to use (LLM_PROVIDER=claude)
-OLLAMA_MODEL="llama3.1"         # Ollama model (LLM_PROVIDER=ollama; needs tool support)
-OLLAMA_BASE_URL="http://localhost:11434/v1"  # Ollama OpenAI-compatible endpoint
+LLM_MODEL="qwen3.5:4b"          # local model — Ollama, llama.cpp, LM Studio, vLLM, …
+LLM_BASE_URL="http://localhost:11434"  # local/OpenAI-compatible server base URL
+LLM_API_STYLE="auto"            # "auto", "ollama" (/api/chat) or "openai" (/v1)
+LLM_API_KEY=""                  # bearer token, if the server requires one
+LLM_NUM_CTX="32768"             # Ollama native context — must exceed guide + files read
+LLM_NUM_PREDICT="-1"            # max tokens per response (-1 = no limit)
 
 # Session
 MAX_TURNS="50"                   # maximum turns per session
@@ -272,45 +276,97 @@ Use `--no-publish` to publish manually instead.
 ./runner/publish.sh --mind nova --push    # publish only (no session)
 ```
 
-### 6. Run locally with Ollama (optional)
+### 6. Run locally: Ollama, llama.cpp, or any OpenAI-compatible server (optional)
 
-Marikai can run against a local Ollama model instead of Claude. This avoids API
-costs, but it is slower and requires a model with tool-use support.
+Marikai can run against a local model instead of Claude. This avoids API costs,
+but it is slower and requires a model with tool-use support.
 
-1. Install [Ollama](https://ollama.com) and pull a tool-capable model:
+`runner/scripts/local-session.py` (standard library only) speaks two dialects:
+
+- **Ollama native** (`/api/chat`) — recommended for Ollama. This is the only
+  dialect in which Marikai can set the context window per request.
+- **OpenAI-compatible** (`/v1/chat/completions`) — used by llama.cpp's
+  `llama-server`, LM Studio, vLLM, text-generation-webui, and most other local
+  servers. Their context size is set when the server starts, not by Marikai.
+
+`LLM_API_STYLE` chooses the dialect. The default, `auto`, detects it from
+`LLM_BASE_URL`: port 11434 is treated as Ollama, and a URL containing `/v1` is
+treated as OpenAI-compatible. Set it explicitly if your server uses an unusual
+URL. For Ollama's own OpenAI-compatible URL (`…:11434/v1`), set it to `"openai"`
+explicitly — `auto` prefers Ollama's native endpoint on port 11434 so that the
+context setting keeps working. `LLM_PROVIDER` can be `"ollama"`, `"openai"` or
+`"local"` — they all use the same local backend; the name is only a label.
+
+#### Ollama
+
+Install [Ollama](https://ollama.com) and pull a tool-capable model:
 
 ```bash
-ollama pull llama3.1
+ollama pull qwen3.5:4b
 ```
 
-2. Set the provider in your config:
+Then set the provider in your config:
 
 ```bash
 LLM_PROVIDER="ollama"
-OLLAMA_MODEL="llama3.1"
-OLLAMA_BASE_URL="http://localhost:11434/v1"
+LLM_MODEL="qwen3.5:4b"
+LLM_BASE_URL="http://localhost:11434"
+LLM_API_STYLE="ollama"   # or "auto"
+LLM_NUM_CTX="32768"
 ```
 
-3. Run sessions as usual:
+#### llama.cpp (`llama-server`)
+
+Start the server with a context large enough for the session guide and enable
+the Jinja chat template (needed for tool calls):
+
+```bash
+llama-server --model model.gguf --ctx-size 32768 --jinja --port 8080
+```
+
+Then point Marikai at its OpenAI-compatible endpoint:
+
+```bash
+LLM_PROVIDER="openai"
+LLM_MODEL="local-model"                 # or the model name llama-server reports
+LLM_BASE_URL="http://localhost:8080/v1"
+LLM_API_STYLE="openai"                  # "auto" also works because of /v1
+```
+
+#### LM Studio, vLLM, or another server
+
+Point `LLM_BASE_URL` at the server's `/v1` URL, set `LLM_API_STYLE="openai"`, and
+add `LLM_API_KEY` if the server requires a token. Make sure tool calling is
+enabled (in LM Studio, choose a model with tool support; in vLLM, start with
+`--enable-auto-tool-choice --tool-call-parser <name>`).
+
+#### Run sessions
 
 ```bash
 ./runner/wake.sh                                  # default mind
 ./runner/wake.sh --mind nova "afternoon"          # named mind
 ```
 
-Ollama is reached through its OpenAI-compatible API (`/v1`) by
-`runner/scripts/ollama-session.py`, which uses only the Python standard library.
-When `LLM_PROVIDER="ollama"`, the Claude Code CLI is not needed.
+When a local backend is selected, the Claude Code CLI is not needed.
 
 Notes:
 
-- Pick a model that supports tool calling — for example `llama3.1`, `llama3.2`,
-  `mistral-nemo`, or `qwen2.5`. Models without tool support cannot read or write
-  files or run commands.
+- Pick a model that supports tool calling **and** writes prose well — for example
+  `qwen3.5:4b`, `llama3.1`, or `mistral-nemo`. Avoid dedicated coder models:
+  they often emit malformed tool-call JSON and only a sentence or two of text.
+- Keep `LLM_NUM_CTX` large for Ollama. Its default on a CPU-only host is only
+  4096 tokens, which is smaller than the session guide alone. When the prompt
+  overflows, Ollama silently drops the oldest messages — including the system
+  prompt and the task — and the model stops after a sentence. 32768 is a safe
+  default; lower it if you run out of RAM. OpenAI-compatible servers ignore this
+  setting, so raise their own context flag (`--ctx-size` for llama.cpp, etc.).
 - Lower `MAX_TURNS` on slower hardware (for example `10`–`20`); each local turn
   can take several seconds.
 - Each mind can use a different provider — set `LLM_PROVIDER` independently in
   `config.<name>.env`.
+- The `OLLAMA_MODEL`, `OLLAMA_BASE_URL`, `OLLAMA_API_STYLE`, `OLLAMA_API_KEY`,
+  `OLLAMA_NUM_CTX` and `OLLAMA_NUM_PREDICT` names are also accepted as
+  fallbacks, so existing configs keep working.
 
 ---
 
@@ -585,8 +641,8 @@ site's about page.
 ---
 
 ## Requirements
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated — only for the default Claude provider, not needed with Ollama
-- [Ollama](https://ollama.com) (optional) — run sessions against a local model instead of Claude
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated — only for the default Claude provider, not needed with a local backend
+- A local OpenAI-compatible server (optional) — [Ollama](https://ollama.com), [llama.cpp](https://github.com/ggml-org/llama.cpp), LM Studio, vLLM, … — to run sessions against a local model instead of Claude
 - `bash`, `curl`, `python3` (standard on Linux/macOS)
 - Internet access (for weather, URL reading, and web search)
 - `trafilatura` (optional Python package — improves web page extraction quality)

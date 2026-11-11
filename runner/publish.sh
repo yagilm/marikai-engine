@@ -118,6 +118,32 @@ CHANGED=0
 # Use PUBLISH_PATHS from config, default to the standard set
 PUBLISH_PATHS="${PUBLISH_PATHS:-journal creatives essays letters identity/about.md inputs/sayings.md inputs/concepts.md}"
 
+# ─── Normalise front matter ──────────────────────────────────────────────────
+#
+# Jekyll only renders a document that begins with a YAML front-matter block.
+# A generated file with a leading blank line or a missing opening `---` is
+# copied but never listed, so it silently disappears from the site. Repair the
+# common mistakes here and abort on anything still malformed.
+
+FRONT_MATTER_PATHS=()
+for rel_path in $PUBLISH_PATHS; do
+  src="$BRAIN_DIR/$rel_path"
+  if [ -d "$src" ]; then
+    FRONT_MATTER_PATHS+=("$src")
+  fi
+done
+# Flat pages that already carry front matter in the brain.
+for rel_path in identity/about.md data/session-log.md; do
+  src="$BRAIN_DIR/$rel_path"
+  if [ -f "$src" ]; then
+    FRONT_MATTER_PATHS+=("$src")
+  fi
+done
+
+if [ "${#FRONT_MATTER_PATHS[@]}" -gt 0 ]; then
+  python3 "$SCRIPT_DIR/scripts/normalise-front-matter.py" "${FRONT_MATTER_PATHS[@]}"
+fi
+
 for rel_path in $PUBLISH_PATHS; do
   src="$BRAIN_DIR/$rel_path"
   dest_rel="$(dest_for "$rel_path")"
@@ -146,6 +172,27 @@ for rel_path in $PUBLISH_PATHS; do
 done
 
 [ "$DRY_RUN" = true ] && exit 0
+
+# ─── Ensure front matter on flat I/O pages ───────────────────────────────────
+#
+# inputs/*.md are synced as plain Markdown. Jekyll only applies the
+# _config.yml defaults (layout/title) to documents that have front matter;
+# without it they are copied as static files and the header links serve raw
+# Markdown. Add a minimal block to the published copies (not the brain files,
+# which Marikai edits as data).
+
+IO_PAGES=()
+for rel_path in inputs/sayings.md inputs/concepts.md inputs/keeper-prompts.md; do
+  dest_rel="$(dest_for "$rel_path")"
+  dest="$PUBLISH_DIR/$dest_rel"
+  if [ -f "$dest" ]; then
+    IO_PAGES+=("$dest")
+  fi
+done
+
+if [ "${#IO_PAGES[@]}" -gt 0 ]; then
+  python3 "$SCRIPT_DIR/scripts/normalise-front-matter.py" --ensure-missing "${IO_PAGES[@]}"
+fi
 
 # ─── Git commit ───────────────────────────────────────────────────────────────
 
