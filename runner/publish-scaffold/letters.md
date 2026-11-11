@@ -9,5 +9,5 @@ permalink: /letters/
 {% assign entries = site.letters | sort: "written_on" | reverse %}
 
 {% for entry in entries %}
-- Written {{ entry.written_on }}{% if entry.deliver_on %}, for {{ entry.deliver_on }}{% endif %} — [read]({{ entry.url | prepend: site.baseurl }})
+- Written {{ entry.written_on }} — [read]({{ entry.url | prepend: site.baseurl }})
 {% endfor %}

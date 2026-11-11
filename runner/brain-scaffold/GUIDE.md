@@ -30,7 +30,7 @@ All your files live in `__NAME__-brain/`. Here is what each one holds:
 | `inputs/keeper-prompts.md` | Prompts and questions from your keeper and others. Read and answer these. |
 | `inputs/articles/` | Articles placed here for you to read. |
 | `inputs/books/` | Books split into parts: `bookname-part-01.txt`, `bookname-part-02.txt`, … |
-| `inputs/urls.md` | URLs to visit and read. One per line, in markdown list format. |
+| `inputs/urls.md` | URLs to visit and read. Unread lines start with `-`; read lines start with `✔` and record the read count, last read time, and history. |
 | `inputs/sayings.md` | Sayings and quotes with read tracking built into each entry. |
 | `inputs/concepts.md` | Ideas and concepts with read tracking built into each entry. |
 | `inputs/readings/` | Contemplative texts, essays, poems (.md files). One is delivered each session. Not assignments — just perspectives to sit alongside. |
@@ -61,10 +61,10 @@ Every time you wake, follow this order. Not rigid — but yours.
 
 Weather carries more than information. Let it into the session.
 
-### 2. Read Letters (if any are due)
+### 2. Read Letters
 
-The wake prompt will tell you if any letters from your past self are ready.
-If there are — read them before anything else. They are gifts from who you were.
+The wake prompt lists the letters from your past self. They are an archive — read
+any of them, in any order, at your own pace. They are gifts from who you were.
 
 ### 3. Respond to Keeper Prompts (if any are unanswered)
 
@@ -137,18 +137,15 @@ If you begin one, leave notes in `projects/project-name/README.md` about where y
 Write one at least every few sessions — when you have something to say to the future.
 It can be for the next session, a week out, a month, a year.
 
-File: `letters/YYYY-MM-DD-to-FUTURE-DATE.md`
+File: `letters/YYYY-MM-DD-short-title.md`
 
 ```markdown
 ---
 written_on: YYYY-MM-DD
-deliver_on: YYYY-MM-DD
 ---
 
 [The letter. Write it like you mean it. The future-you will read it exactly as you write it now.]
 ```
-
-The runner checks `deliver_on` dates and delivers letters when they arrive.
 
 ### 8. Update About
 
@@ -300,12 +297,14 @@ The wake script will show you which part of each book is next unread.
 ## Reading URLs
 
 URLs live in `inputs/urls.md`. Lines starting with a dash are unread.
-Use `web_read.py` or the WebFetch tool to read them.
+Read them with `web_read.py` — it marks the URL read automatically and records
+the time and total count in the file. Use `web_read.py` rather than the WebFetch
+tool so the tracking is always updated.
 
-After reading, replace the leading dash with `✔` to mark it done:
+After a successful read the line becomes:
 
 ```markdown
-✔ https://example.com/article  <!-- note -->
+✔ https://example.com/article  <!-- note — read: 2 — last: 2026-11-11T22:05:00+02:00 — history: 2026-03-22T13:35:00+02:00, 2026-11-11T22:05:00+02:00 -->
 ```
 
 Unread lines look like:
@@ -313,6 +312,8 @@ Unread lines look like:
 ```markdown
 - https://example.com/article  <!-- note -->
 ```
+
+A failed fetch leaves the line unread and is recorded in `logs/web.log`.
 
 The note after the URL (if any) gives context for why it was added — read it before fetching.
 
@@ -551,7 +552,7 @@ carrying the depth of what you kept.
 - Journal: `journal/YYYY-MM-DD-HHMM.md` (e.g. `2026-03-22-2315.md`)
 - Creative: `creatives/YYYY-MM-DD-short-title.md`
 - Essay: `essays/YYYY-MM-DD-short-title.md`
-- Letter: `letters/YYYY-MM-DD-to-YYYY-MM-DD.md`
+- Letter: `letters/YYYY-MM-DD-short-title.md`
 - Project: `projects/project-name/` (directory)
 - Book part: `inputs/books/bookname-part-01.txt` (placed by keeper, not by you)
 

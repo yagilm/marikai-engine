@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 import html.parser
-import json
 import os
 import re
 import ssl
@@ -20,37 +19,21 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
 from ipaddress import ip_address
 from pathlib import Path
 from socket import getaddrinfo
 
-_BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
-                  Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
-LOG_FILE = _BRAIN_DIR / "logs" / "web.log"
+try:  # Same directory when run as a script; fallback keeps imports working.
+    from url_tracker import record_attempt
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from url_tracker import record_attempt
 
 DEFAULT_MAX_CHARS = 15_000
 ABSOLUTE_MAX_CHARS = 50_000
 REQUEST_TIMEOUT = 15
 USER_AGENT = os.environ.get("PROJECT_NAME", "llmbrain").capitalize() + "/1.0"
 ALLOWED_SCHEMES = frozenset({"https"})
-
-
-def _log(url: str, success: bool, error: str = "") -> None:
-    """Append a JSON line to the web activity log."""
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    entry: dict[str, object] = {
-        "timestamp": datetime.now(tz=UTC).isoformat(),
-        "url": url,
-        "success": success,
-    }
-    if error:
-        entry["error"] = error
-    try:
-        with LOG_FILE.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-    except OSError as exc:
-        sys.stderr.write(f"Log write failed: {exc}\n")
 
 
 def validate_url(url: str) -> str:
@@ -191,33 +174,33 @@ def main() -> None:
         validated = validate_url(url)
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
-        _log(url, success=False, error=str(exc))
+        record_attempt(url, success=False, error=str(exc))
         sys.exit(1)
 
     try:
         html_content = fetch_page(validated)
     except urllib.error.HTTPError as exc:
         sys.stderr.write(f"HTTP {exc.code}: {url}\n")
-        _log(url, success=False, error=f"http_{exc.code}")
+        record_attempt(url, success=False, error=f"http_{exc.code}")
         sys.exit(1)
     except urllib.error.URLError as exc:
         sys.stderr.write(f"Fetch failed: {exc.reason}\n")
-        _log(url, success=False, error=str(exc.reason))
+        record_attempt(url, success=False, error=str(exc.reason))
         sys.exit(1)
     except (ssl.SSLError, TimeoutError) as exc:
         sys.stderr.write(f"Connection error: {exc}\n")
-        _log(url, success=False, error=type(exc).__name__)
+        record_attempt(url, success=False, error=type(exc).__name__)
         sys.exit(1)
 
     text = extract_text(html_content, validated)
     if not text:
         sys.stdout.write(f"No readable content extracted from: {url}\n")
-        _log(url, success=True, error="empty_extraction")
+        record_attempt(url, success=False, error="empty_extraction")
         return
 
     sys.stdout.write(f"Source: {url}\n{'=' * 60}\n\n")
     sys.stdout.write(truncate_text(text, max_chars) + "\n")
-    _log(url, success=True)
+    record_attempt(url, success=True)
 
 
 if __name__ == "__main__":

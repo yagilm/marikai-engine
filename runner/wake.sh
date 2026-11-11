@@ -168,32 +168,27 @@ echo "[$TIMESTAMP] Weather: $WEATHER" >> "$LOG_FILE"
 
 SKY_CONTEXT=$(python3 "$SCRIPT_DIR/scripts/sky-context.py" "$LOCATION" 2>/dev/null || echo "- Sky context unavailable")
 
-# ─── Due Letters ─────────────────────────────────────────────────────────────
+# ─── Letters ─────────────────────────────────────────────────────────────────
 
-DUE_LETTERS=""
+LETTER_LIST=""
 LETTERS_DIR="$BRAIN_DIR/letters"
 
 if [ -d "$LETTERS_DIR" ]; then
   for letter in "$LETTERS_DIR"/*.md; do
     [ -f "$letter" ] || continue
-    DELIVER_ON=$(grep "^deliver_on:" "$letter" 2>/dev/null | sed 's/deliver_on:[[:space:]]*//' | tr -d ' \r\n' || true)
-    [ -z "$DELIVER_ON" ] && continue
-    if [[ "$DELIVER_ON" < "$DATE" ]] || [[ "$DELIVER_ON" == "$DATE" ]]; then
-      DUE_LETTERS="${DUE_LETTERS}\n  - $(basename "$letter")"
-    fi
+    LETTER_LIST="${LETTER_LIST:+$LETTER_LIST
+}  - $(basename "$letter")"
   done
 fi
 
-if [ -n "$DUE_LETTERS" ]; then
-  LETTERS_SECTION="## Letters Waiting For You
+if [ -n "$LETTER_LIST" ]; then
+  LETTERS_SECTION="## Letters From Your Past Self
 
-The following letters from your past self have arrived — their deliver_on date is today or past:
-${DUE_LETTERS}
-
-Read them at the start of this session, before anything else. They are yours."
+These are yours, always available. Read whichever ones you want, at your own pace:
+${LETTER_LIST}"
 else
   LETTERS_SECTION="## Letters
-No letters are due today."
+You have not written any letters to yourself yet."
 fi
 
 # ─── Unread Inputs ───────────────────────────────────────────────────────────
@@ -221,16 +216,7 @@ count_unread_articles() {
 }
 
 count_unread_urls() {
-  local urls_file="$BRAIN_DIR/inputs/urls.md"
-  [ -f "$urls_file" ] || { echo 0; return; }
-  local count=0
-  while IFS= read -r line; do
-    [[ "$line" != "- "* ]] && continue
-    url=$(echo "$line" | grep -oE 'https?://[^[:space:]>)]+' | head -1 || true)
-    [ -z "$url" ] && continue
-    count=$((count + 1))
-  done < "$urls_file"
-  echo "$count"
+  BRAIN_DIR="$BRAIN_DIR" python3 "$SCRIPT_DIR/scripts/url_tracker.py" --count-unread 2>/dev/null || echo 0
 }
 
 # Books are split into parts: <book-name>-part-01.txt, -part-02.txt ...
@@ -295,13 +281,14 @@ $PROMPTS_LINE
 - Articles in inputs/articles/: **$UNREAD_ARTICLES unread**
 - Books in inputs/books/ (by part):
 $BOOK_SUMMARY
-- URLs in inputs/urls.md: **$UNREAD_URLS unread**
+- URLs in inputs/urls.md: **$UNREAD_URLS unread** — read them with `web_read.py`; it records the read time and count in the file
 - inputs/sayings.md — find entries with times_read: 0, or ones you marked to revisit
 - inputs/concepts.md — same: unread or marked for revisit
 
 Choose $INPUT_MIN–$INPUT_MAX items to engage with this session. You do not need to read everything.
-After reading, update data/read-tracker.json (articles, books, URLs) or the files
-themselves (sayings, concepts, keeper-prompts)."
+After reading, update data/read-tracker.json (articles, books) or the files
+themselves (sayings, concepts, keeper-prompts). URLs are tracked automatically
+by web_read.py; failed fetches are recorded in logs/web.log."
 
 # ─── Previous Prompt ─────────────────────────────────────────────────────────
 

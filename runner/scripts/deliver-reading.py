@@ -29,6 +29,12 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+try:  # Same directory when run as a script.
+    from url_tracker import log_attempt
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from url_tracker import log_attempt
+
 _BRAIN_DIR = Path(os.environ.get("BRAIN_DIR",
                   Path(__file__).parent.parent.parent / (os.environ.get("PROJECT_NAME", "marikai") + "-brain")))
 
@@ -190,6 +196,7 @@ def main() -> None:
         try:
             text = fetch_url(entry["url"])
         except Exception as exc:
+            log_attempt(entry["url"], False, str(exc))
             print(f"(Could not fetch {entry['url']}: {exc})", file=sys.stderr)
             # Fall through to file fallback below
         else:
@@ -212,6 +219,7 @@ def main() -> None:
         try:
             text = fetch_url(entry["url"])
         except Exception as exc:
+            log_attempt(entry["url"], False, str(exc))
             print(f"(Could not fetch {entry['url']}: {exc})", file=sys.stderr)
             sys.exit(0)
         mark_url_read(entry["url"], entry["note"], entry["read_count"])

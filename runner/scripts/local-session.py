@@ -49,6 +49,23 @@ try:  # PyYAML matches the check publish uses; structural checks still work with
 except ImportError:  # pragma: no cover
     yaml = None
 
+
+def _record_url_attempt(url: str, success: bool, error: str = "") -> None:
+    """Log a WebFetch attempt and mark the URL read when it succeeds."""
+    try:
+        from url_tracker import record_attempt
+    except ImportError:  # pragma: no cover - direct script execution adds the dir
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        try:
+            from url_tracker import record_attempt
+        except ImportError:
+            return
+    try:
+        record_attempt(url, success, error)
+    except Exception:
+        # Tracking must never break the tool call itself.
+        pass
+
 # ── Stream-json emitters ──────────────────────────────────────────────────────
 
 def _emit(event: dict) -> None:
@@ -218,9 +235,14 @@ def tool_web_fetch(url: str, max_chars: int = 8000) -> str:
         # Strip HTML tags for a plain-text view
         text = re.sub(r"<[^>]+>", " ", raw)
         text = re.sub(r"\s+", " ", text).strip()
-        return text[:max_chars]
     except urllib.error.URLError as e:
+        _record_url_attempt(url, False, str(e))
         return f"Error fetching {url}: {e}"
+    except Exception as e:
+        _record_url_attempt(url, False, str(e))
+        return f"Error fetching {url}: {e}"
+    _record_url_attempt(url, True)
+    return text[:max_chars]
 
 
 def tool_web_search(query: str, api_key: str | None = None) -> str:

@@ -86,7 +86,7 @@ marikAI/
 │   ├── creatives/              # Poetry, prose, anything creative
 │   ├── essays/                 # Essays on topics and ideas
 │   ├── projects/               # Code, research, sustained work
-│   ├── letters/                # Letters to future self (deliver_on frontmatter)
+│   ├── letters/                # Letters to future self
 │   ├── logs/                   # Session logs, transcripts, sessions.jsonl, web.log
 │   ├── prompt/
 │   │   └── prompt.md           # Message from last session to next
@@ -400,8 +400,20 @@ Add URLs to `{PROJECT_NAME}-brain/inputs/urls.md`:
 
 ```markdown
 - https://example.com/interesting-article
-- https://another-site.org/essay
+- https://another-site.org/essay  <!-- optional note -->
 ```
+
+Unread lines start with `-`. Read them with `web_read.py`, which updates the
+line automatically with the read count, last read time, and full history:
+
+```markdown
+✔ https://example.com/interesting-article  <!-- read: 2 — last: 2026-11-11T22:05:00+02:00 — history: 2026-03-22T13:35:00+02:00, 2026-11-11T22:05:00+02:00 -->
+```
+
+A failed fetch leaves the line unread and is recorded in
+`{PROJECT_NAME}-brain/logs/web.log` (JSON lines with the URL, timestamp, and
+error). The local WebFetch tool also records its attempts, but `web_read.py`
+gives the cleaner extraction and writes the tracked line.
 
 ### Readings
 
@@ -488,14 +500,13 @@ The AI writes letters to its future self. They live in `{PROJECT_NAME}-brain/let
 ```markdown
 ---
 written_on: 2026-03-20
-deliver_on: 2026-04-20
 ---
 
 [The letter]
 ```
 
-When a session starts and a letter's `deliver_on` date has arrived, the wake prompt
-notifies the AI and it reads the letter before beginning its work.
+Letters are an always-available archive: every session sees the list of letters in the
+wake prompt and can read any of them, past or recent.
 
 ---
 
