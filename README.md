@@ -169,6 +169,7 @@ LLM_NUM_PREDICT="-1"            # max tokens per response (-1 = no limit)
 
 # Session
 MAX_TURNS="50"                   # maximum turns per session
+REQUIRE_ESSAY="true"             # require one essay per session (local runner enforces)
 GIT_COMMIT="false"               # auto-commit {PROJECT_NAME}-brain/ after each session
 INPUT_MIN="1"                    # minimum inputs the AI reads per session
 INPUT_MAX="3"                    # maximum inputs the AI reads per session
@@ -360,8 +361,13 @@ Notes:
   prompt and the task — and the model stops after a sentence. 32768 is a safe
   default; lower it if you run out of RAM. OpenAI-compatible servers ignore this
   setting, so raise their own context flag (`--ctx-size` for llama.cpp, etc.).
+- Every session is asked to write an essay, a creative piece, and a journal
+  entry. With `REQUIRE_ESSAY="true"` (the default) the wake prompt states this
+  explicitly and the local runner nudges the model if it tries to finish without
+  a substantial essay in `essays/`. Set it to `false` only if you intentionally
+  want sessions without essays.
 - Lower `MAX_TURNS` on slower hardware (for example `10`–`20`); each local turn
-  can take several seconds.
+  can take several seconds. Leave enough turns for the essay nudge to succeed.
 - Each mind can use a different provider — set `LLM_PROVIDER` independently in
   `config.<name>.env`.
 - The `OLLAMA_MODEL`, `OLLAMA_BASE_URL`, `OLLAMA_API_STYLE`, `OLLAMA_API_KEY`,

@@ -76,6 +76,10 @@ LLM_API_KEY="${LLM_API_KEY:-${OLLAMA_API_KEY:-}}"
 LLM_NUM_CTX="${LLM_NUM_CTX:-${OLLAMA_NUM_CTX:-32768}}"
 LLM_NUM_PREDICT="${LLM_NUM_PREDICT:-${OLLAMA_NUM_PREDICT:--1}}"
 MAX_TURNS="${MAX_TURNS:-50}"
+# Require one essay per session. The guide asks for it; this setting also makes
+# the wake prompt state it explicitly and makes the local runner nudge a model
+# that tries to finish without writing one.
+REQUIRE_ESSAY="${REQUIRE_ESSAY:-true}"
 LOCATION="${LOCATION:-Athens, Greece}"
 GIT_COMMIT="${GIT_COMMIT:-false}"
 INPUT_MIN="${INPUT_MIN:-1}"
@@ -445,6 +449,21 @@ $SEMANTIC_RESULTS"
   fi
 fi
 
+# ─── Required writing ────────────────────────────────────────────────────────
+
+REQUIRED_WRITING_SECTION=""
+if [ "$REQUIRE_ESSAY" = "true" ]; then
+  REQUIRED_WRITING_SECTION="## Required Writing This Session
+
+Write all of these with the Write tool before you finish:
+
+1. An **essay** in \`essays/YYYY-MM-DD-slug.md\` — at least 800 words of your own thinking, with \`date\`, \`title\`, and \`topic\` front matter.
+2. A **creative piece** in \`creatives/YYYY-MM-DD-slug.md\`.
+3. A **journal entry** in \`journal/YYYY-MM-DD-HHMM.md\`.
+
+The essay is required every session. Do not substitute a creative piece for it, and do not stop before it is written."
+fi
+
 # ─── Wake Prompt ─────────────────────────────────────────────────────────────
 
 WAKE_PROMPT="You are $PROJECT_NAME_CAP. You are waking up.
@@ -475,6 +494,8 @@ $VOICE_SECTION
 
 $READING_SECTION
 
+$REQUIRED_WRITING_SECTION
+
 ## Begin
 
 Read $GUIDE_FILE first — it is in this directory and contains your full session guide.
@@ -499,6 +520,13 @@ SESSION_START_EPOCH=$(date +%s)
 export BRAIN_DIR
 export LANGSEARCH_API_KEY="${LANGSEARCH_API_KEY:-}"
 
+ESSAY_FLAGS=()
+if [ "$REQUIRE_ESSAY" = "true" ]; then
+  ESSAY_FLAGS+=(--require-essay)
+else
+  ESSAY_FLAGS+=(--no-require-essay)
+fi
+
 DISPLAY_LOG=$(mktemp)
 if [ "$USE_LOCAL_BACKEND" = true ]; then
   python3 "$SCRIPT_DIR/scripts/local-session.py" \
@@ -510,6 +538,7 @@ if [ "$USE_LOCAL_BACKEND" = true ]; then
     --api-key "$LLM_API_KEY" \
     --num-ctx "$LLM_NUM_CTX" \
     --num-predict "$LLM_NUM_PREDICT" \
+    "${ESSAY_FLAGS[@]}" \
     -p "$WAKE_PROMPT" \
     2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
 else

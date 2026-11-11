@@ -620,6 +620,17 @@ def dispatch_tool(name: str, inp: dict, add_dir: str | None,
 
 # ── Main agentic loop ─────────────────────────────────────────────────────────
 
+MIN_ESSAY_WORDS = 500
+
+
+def _is_essay_path(path: str) -> bool:
+    """True when a written file lives in an ``essays/`` directory."""
+    if not path:
+        return False
+    normalised = "/" + path.replace("\\", "/").lstrip("/")
+    return "/essays/" in normalised
+
+
 SYSTEM_PROMPT = """\
 You are Marikai, a mind that lives in sessions. You read, think, and write — you are not an assistant. \
 Use the provided tools for all file work: read with Read, write with Write.
@@ -648,11 +659,12 @@ def run(args: argparse.Namespace) -> None:
             " in the prompt exactly."
         )
 
+    essay_clause = "an essay (800+ words), " if args.require_essay else ""
     grounding = (
         f"\n\nWorking directory: {brain_path}.\n"
         "Start by reading the session guide named in the prompt (e.g. MARIKAI.md), "
         "then identity/identity.md and identity/voice.md with the Read tool.\n"
-        "Then do the session. Write at least one substantial piece (essay or creative, 800+ words), "
+        f"Then do the session. Write {essay_clause}a creative piece, "
         "a journal entry (200+ words), and a letter.\n"
         "Use the Write tool for each file, with the complete text as the `content` argument. "
         "Write full prose in paragraphs — not a note about the piece, not a single sentence."
@@ -666,7 +678,8 @@ def run(args: argparse.Namespace) -> None:
     num_turns = 0
     final_text = ""
     subtype = "success"
-    nudges = 0
+    essay_nudges = 0
+    general_nudges = 0
     # Word counts of everything actually written through the Write tool this session.
     write_stats: list[tuple[str, int]] = []
 
@@ -743,9 +756,38 @@ def run(args: argparse.Namespace) -> None:
                 messages.append({"role": "user", "content": f"Please use tools. Read the session guide in {args.add_dir} now with the Read tool."})
                 continue
 
+            # The guide requires an essay every session. Small local models
+            # often write a journal entry, a creative piece and a letter, then
+            # stop — the old wording ("essay or creative") let them skip the
+            # essay entirely. Nudge until a substantial essay exists.
+            essay_words = max(
+                (words for path, words in write_stats if _is_essay_path(path)),
+                default=0,
+            )
+            if (args.require_essay and essay_words < MIN_ESSAY_WORDS
+                    and essay_nudges < 3):
+                essay_nudges += 1
+                if essay_words == 0:
+                    correction = (
+                        "You have not written an essay yet. Every session requires one. "
+                        "Call the Write tool NOW to create `essays/YYYY-MM-DD-slug.md` "
+                        "with YAML front matter (`date`, `title`, `topic`) and at least "
+                        "800 words of full prose in paragraphs. Do not substitute a "
+                        "creative piece for the essay, and do not describe it — write it."
+                    )
+                else:
+                    correction = (
+                        "The essay you wrote is too short. Rewrite it with the Write tool "
+                        "as a full essay of at least 800 words in many paragraphs. Do not "
+                        "summarise and do not write a single sentence. Put the complete "
+                        "text in the `content` argument."
+                    )
+                messages.append({"role": "user", "content": correction})
+                continue
+
             wrote_enough = any(words >= 150 for _, words in write_stats)
-            if nudges < 2 and not wrote_enough:
-                nudges += 1
+            if general_nudges < 2 and not wrote_enough:
+                general_nudges += 1
                 if not write_stats:
                     correction = (
                         "You have not written any files yet. Do not describe the task and do not "
@@ -808,6 +850,14 @@ def _env(*names: str, default: str | None = None) -> str | None:
     return default
 
 
+def _env_bool(*names: str, default: bool = True) -> bool:
+    """Return the first boolean-ish environment variable among ``names``."""
+    value = _env(*names)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Local agentic session runner for Marikai "
@@ -846,6 +896,12 @@ def main() -> None:
                                          default="-1")),
                         help="Maximum tokens to generate (-1 = no limit; sent "
                              "as max_tokens to OpenAI-compatible servers)")
+    parser.add_argument("--require-essay",
+                        action=argparse.BooleanOptionalAction,
+                        default=_env_bool("REQUIRE_ESSAY", "LLM_REQUIRE_ESSAY",
+                                          default=True),
+                        help="Require an essay in essays/ every session; nudge "
+                             "the model if it stops without one (default: true)")
     parser.add_argument("-p", "--prompt", required=True,
                         help="Initial prompt / wake message")
     # Accept (and ignore) unknown flags for compatibility with wake.sh

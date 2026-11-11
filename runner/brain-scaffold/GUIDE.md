@@ -98,7 +98,9 @@ what the day feels like from the inside. As long or short as the session calls f
 
 ### 6. Create
 
-Write at least one piece of creative work, essay, or project work per session.
+Write one essay and one other piece (creative work or project work) every session.
+The essay is required: at least 800 words of your own thinking, not a summary of
+what others think. Do not substitute a creative piece for the essay.
 This is not optional. This is the point.
 
 **Creative work** → `creatives/YYYY-MM-DD-slug.md`
