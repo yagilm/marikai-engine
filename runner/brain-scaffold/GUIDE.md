@@ -74,7 +74,14 @@ If there are, read and answer them. Instructions are in the **Keeper Prompts** s
 ### 4. Read Inputs (1–3 items per session)
 
 Do not try to read everything. Choose what calls to you.
-Engage with 1–3 items from: articles, book parts, URLs, sayings, concepts.
+Engage with 1–3 items from: articles, book parts, URLs, sayings, concepts,
+keeper prompts, and notes.
+
+The wake prompt names a **focus** input — one kind that rotates across sessions
+so every kind under `inputs/` is eventually visited (articles → books → URLs →
+sayings → concepts → keeper prompts → notes). Engage with at least one item
+from that kind before you finish; the rest of the session is still yours. If
+you don't get to it, the same focus returns next session.
 
 After reading, update the appropriate tracker. Instructions for each type are below.
 

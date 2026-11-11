@@ -93,6 +93,7 @@ marikAI/
 │   └── data/
 │       ├── read-tracker.json        # Tracks articles, book parts, URLs read
 │       ├── readings-tracker.json    # Tracks readings/ passages and readings-urls.md
+│       ├── input-rotation.json      # Which input kind is in focus across sessions
 │       ├── mood-state.json          # Mood state carried between sessions
 │       ├── mood-history.jsonl       # Full mood history across all sessions
 │       ├── self-schedule.json       # Pending self-scheduled session (if any)
@@ -454,6 +455,26 @@ BRAIN_DIR={PROJECT_NAME}-brain python3 runner/scripts/deliver-reading.py --list
 Edit `{PROJECT_NAME}-brain/inputs/sayings.md` and `{PROJECT_NAME}-brain/inputs/concepts.md` directly.
 Each entry has inline `times_read` and `revisit` tracking that the AI edits in-place.
 
+### How input kinds are rotated
+
+Each session has one input **focus**, and the focus changes only once the mind has
+actually engaged with that kind. Over sessions it cycles through articles, book
+parts, URLs, sayings, concepts, keeper prompts, and notes, skipping kinds with
+nothing available. So nothing you add is permanently ignored, even if the mind
+prefers other inputs for a while.
+
+The focus appears in the wake prompt, and the local runner nudges the model if it
+tries to finish without opening it. Rotation state lives in
+`{PROJECT_NAME}-brain/data/input-rotation.json`; resetting the mind clears it.
+Readings are not part of the rotation because one is delivered automatically
+each session.
+
+To see the current focus and what is available:
+
+```bash
+BRAIN_DIR={PROJECT_NAME}-brain python3 runner/scripts/input_rotation.py --status
+```
+
 ---
 
 ## Communicating with the AI
@@ -592,6 +613,7 @@ All scripts live in `runner/scripts/` and run automatically or on demand.
 | `semantic-search.py` | Auto (pre-session) | Queries the index with the last prompt; injects resonant passages into wake |
 | `resonance.py` | On demand (AI or manual) | Finds thematic connections across all writing; writes `data/resonance.md` |
 | `deliver-reading.py` | Auto (pre-session) | Picks a reading for the session from `inputs/readings/` or `readings-urls.md` |
+| `input_rotation.py` | Auto (pre/post-session) | Keeps one input kind in focus until a session engages it, then advances |
 | `pdf_read.py` | On demand (AI) | Extracts readable text from a PDF file or URL |
 | `live-display.py` | Auto (during session) | Reads stream-json from stdin and pretty-prints a live terminal view |
 | `build-log.py` | On demand | Builds `data/session-log.md` from Final Response sections across all transcripts |

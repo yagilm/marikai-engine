@@ -49,6 +49,43 @@ try:  # PyYAML matches the check publish uses; structural checks still work with
 except ImportError:  # pragma: no cover
     yaml = None
 
+try:  # Keep the engagement markers in one place.
+    from input_rotation import MARKERS as INPUT_FOCUS_MARKERS
+except Exception:  # pragma: no cover - rotation is optional
+    INPUT_FOCUS_MARKERS = {}
+
+INPUT_FOCUS_LABELS = {
+    "articles": "articles",
+    "books": "book parts",
+    "urls": "URLs",
+    "sayings": "sayings",
+    "concepts": "concepts",
+    "keeper_prompts": "keeper prompts",
+    "notes": "keeper notes",
+}
+
+INPUT_FOCUS_HINTS = {
+    "articles": "read one PDF in `inputs/articles/` with pdf_read.py",
+    "books": "read the next part in `inputs/books/`",
+    "urls": "open `inputs/urls.md` and read one unread URL with web_read.py",
+    "sayings": "open `inputs/sayings.md` and sit with one entry",
+    "concepts": "open `inputs/concepts.md` and sit with one entry",
+    "keeper_prompts": "open `inputs/keeper-prompts.md` and answer one prompt",
+    "notes": "open `inputs/note.md` and read the pending notes",
+}
+
+
+def _tool_engaged_focus(tool_input: dict, kind: str) -> bool:
+    """Return whether a tool call touched the focused input kind."""
+    markers = INPUT_FOCUS_MARKERS.get(kind, ())
+    if not markers:
+        return False
+    try:
+        payload = json.dumps(tool_input or {}, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return False
+    return any(marker in payload for marker in markers)
+
 
 def _record_url_attempt(url: str, success: bool, error: str = "") -> None:
     """Log a WebFetch attempt and mark the URL read when it succeeds."""
@@ -773,6 +810,9 @@ def run(args: argparse.Namespace) -> None:
     essay_nudges = 0
     general_nudges = 0
     front_matter_nudges = 0
+    input_focus_nudges = 0
+    input_focus = (args.input_focus or "").strip()
+    input_focus_engaged = False
     # Word counts of everything actually written through the Write tool this session.
     write_stats: list[tuple[str, int]] = []
     # Collection files whose on-disk front matter is unusable, keyed by path.
@@ -917,6 +957,24 @@ def run(args: argparse.Namespace) -> None:
                     )
                 messages.append({"role": "user", "content": correction})
                 continue
+
+            # Inputs rotate so every kind is eventually visited. This is the
+            # last check before the session ends: the writing matters more, so
+            # the focus nudge comes after the writing nudges.
+            if (input_focus and not input_focus_engaged
+                    and input_focus_nudges < 2):
+                input_focus_nudges += 1
+                label = INPUT_FOCUS_LABELS.get(input_focus, input_focus)
+                hint = INPUT_FOCUS_HINTS.get(
+                    input_focus, f"open `inputs/{input_focus}`")
+                correction = (
+                    f"This session's input focus is {label}, and you have not "
+                    f"opened it yet. Before you finish, {hint}. Read it with the "
+                    "Read tool and let it into the session. After you have "
+                    "engaged with one item, you may finish."
+                )
+                messages.append({"role": "user", "content": correction})
+                continue
             break
 
         # Execute tools and add results
@@ -931,6 +989,9 @@ def run(args: argparse.Namespace) -> None:
                     tool_input = json.loads(tool_input)
                 except json.JSONDecodeError:
                     tool_input = {}
+            if (input_focus and not input_focus_engaged
+                    and _tool_engaged_focus(tool_input, input_focus)):
+                input_focus_engaged = True
             result = dispatch_tool(tool_name, tool_input, args.add_dir, langsearch_key)
             file_path = tool_input.get("file_path") or ""
             if tool_name == "Write":
@@ -1032,6 +1093,10 @@ def main() -> None:
                                           default=True),
                         help="Require an essay in essays/ every session; nudge "
                              "the model if it stops without one (default: true)")
+    parser.add_argument("--input-focus", default="",
+                        help="Input kind this session should engage (from "
+                             "input_rotation.py); nudge the model if it stops "
+                             "without touching it")
     parser.add_argument("-p", "--prompt", required=True,
                         help="Initial prompt / wake message")
     # Accept (and ignore) unknown flags for compatibility with wake.sh

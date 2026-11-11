@@ -290,6 +290,24 @@ After reading, update data/read-tracker.json (articles, books) or the files
 themselves (sayings, concepts, keeper-prompts). URLs are tracked automatically
 by web_read.py; failed fetches are recorded in logs/web.log."
 
+# ─── Input Rotation ──────────────────────────────────────────────────────────
+# Keep one input kind in focus until a session actually engages with it, then
+# advance. Over sessions this visits every kind under inputs/. Readings are
+# excluded because one is delivered automatically each session.
+
+INPUT_ROTATION="$SCRIPT_DIR/scripts/input_rotation.py"
+INPUT_FOCUS_KIND=""
+INPUT_FOCUS_SECTION=""
+if [ -f "$INPUT_ROTATION" ]; then
+  INPUT_FOCUS_KIND=$(BRAIN_DIR="$BRAIN_DIR" PROJECT_NAME="$PROJECT_NAME" \
+    python3 "$INPUT_ROTATION" --begin 2>>"$LOG_FILE" || true)
+  if [ -n "$INPUT_FOCUS_KIND" ]; then
+    INPUT_FOCUS_SECTION=$(BRAIN_DIR="$BRAIN_DIR" PROJECT_NAME="$PROJECT_NAME" \
+      python3 "$INPUT_ROTATION" --section 2>>"$LOG_FILE" || true)
+    echo "[$TIMESTAMP] Input focus: $INPUT_FOCUS_KIND" >> "$LOG_FILE"
+  fi
+fi
+
 # ─── Previous Prompt ─────────────────────────────────────────────────────────
 
 PROMPT_FILE="$BRAIN_DIR/prompt/prompt.md"
@@ -481,6 +499,8 @@ $LETTERS_SECTION
 
 $INPUTS_SECTION
 
+$INPUT_FOCUS_SECTION
+
 $NOTES_SECTION
 
 $THREADS_SECTION
@@ -535,6 +555,7 @@ if [ "$USE_LOCAL_BACKEND" = true ]; then
     --api-key "$LLM_API_KEY" \
     --num-ctx "$LLM_NUM_CTX" \
     --num-predict "$LLM_NUM_PREDICT" \
+    --input-focus "$INPUT_FOCUS_KIND" \
     "${ESSAY_FLAGS[@]}" \
     -p "$WAKE_PROMPT" \
     2>> "$LOG_FILE" | python3 "$SCRIPT_DIR/scripts/live-display.py" "$STREAM_FILE" "$DISPLAY_LOG"
@@ -568,6 +589,12 @@ echo "[$(date +"%Y-%m-%d %H:%M:%S")] Session complete. Duration: $SESSION_ELAPSE
 # ─── Post-session: transcript + structured log ───────────────────────────────
 
 if [ -s "$STREAM_FILE" ]; then
+  if [ -n "$INPUT_FOCUS_KIND" ] && [ -f "$INPUT_ROTATION" ]; then
+    BRAIN_DIR="$BRAIN_DIR" PROJECT_NAME="$PROJECT_NAME" \
+      python3 "$INPUT_ROTATION" --check "$STREAM_FILE" \
+      >> "$LOG_FILE" 2>&1 || true
+  fi
+
   "$SCRIPT_DIR/scripts/process-transcript.sh" "$STREAM_FILE" "$TRANSCRIPT_FILE" \
     2>>"$LOG_FILE" || true
   echo "[$TIMESTAMP] Transcript written: $(basename "$TRANSCRIPT_FILE")" >> "$LOG_FILE"
