@@ -30,6 +30,8 @@ except ImportError:  # pragma: no cover - structural checks still work
     yaml = None
 
 KEY_LINE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*\s*:")
+TIME_LINE_RE = re.compile(r"^(?P<indent>\s*)time\s*:\s*(?P<value>.*?)\s*$")
+TIME_VALUE_RE = re.compile(r"^(?P<hour>(?:[01]?\d|2[0-3])):(?P<minute>[0-5]\d)$")
 
 
 def _is_key_line(line: str) -> bool:
@@ -114,6 +116,26 @@ def normalise(text: str, ensure_missing: bool = False) -> tuple[str, list[str], 
     if bad:
         return original, repairs, [f"unparsable front-matter line: {bad[0]!r}"]
 
+    # Keep `time` as a quoted HH:MM string. YAML reads bare times such as
+    # `22:05` as sexagesimal integers, which breaks Jekyll listings.
+    for index in range(1, closing):
+        match = TIME_LINE_RE.match(lines[index])
+        if match is None:
+            continue
+        raw = match.group("value").strip()
+        value = raw.strip("'\"")
+        time_match = TIME_VALUE_RE.match(value)
+        if time_match is None:
+            return original, repairs, [f"invalid time (want HH:MM): {raw!r}"]
+        normalised = (
+            f"{int(time_match.group('hour')):02d}:{time_match.group('minute')}"
+        )
+        replacement = f"{match.group('indent')}time: \"{normalised}\""
+        if lines[index] != replacement:
+            lines[index] = replacement
+            repairs.append("quoted time as HH:MM")
+        break
+
     if yaml is not None:
         try:
             data = yaml.safe_load("\n".join(lines[1:closing]))
@@ -123,6 +145,8 @@ def normalise(text: str, ensure_missing: bool = False) -> tuple[str, list[str], 
             return original, repairs, ["front matter is not a YAML mapping"]
         if "date" in data and data["date"] in (None, ""):
             return original, repairs, ["empty date field"]
+        if "time" in data and data["time"] in (None, ""):
+            return original, repairs, ["empty time field"]
 
     new_text = "\n".join(lines)
     if ends_with_newline:

@@ -692,13 +692,15 @@ def dispatch_tool(name: str, inp: dict, add_dir: str | None,
 
 MIN_ESSAY_WORDS = 500
 
-# Jekyll collections and the field their listings rely on.
+# Jekyll collections and the date field their listings rely on.
 COLLECTION_FIELDS = {
     "journal": "date",
     "creatives": "date",
     "essays": "date",
     "letters": "written_on",
 }
+
+TIME_RE = re.compile(r"^(?:[01]?\d|2[0-3]):[0-5]\d$")
 
 
 def _is_essay_path(path: str) -> bool:
@@ -750,6 +752,13 @@ def _front_matter_problem(path: str, content: str) -> str | None:
     required = COLLECTION_FIELDS[collection]
     if not re.search(rf"^{re.escape(required)}\s*:\s*\S", block, re.MULTILINE):
         return f"missing required '{required}:' field"
+
+    time_match = re.search(r"^time\s*:\s*(?P<value>.+)$", block, re.MULTILINE)
+    if time_match is None:
+        return "missing required 'time:' field"
+    time_value = time_match.group("value").strip().strip("\"'")
+    if not TIME_RE.fullmatch(time_value):
+        return "time must be HH:MM in 24-hour format"
 
     if yaml is not None:
         try:
@@ -803,8 +812,8 @@ def run(args: argparse.Namespace) -> None:
         "a journal entry (200+ words), and a letter.\n"
         "Use the Write tool for each file, with the complete text as the `content` argument. "
         "Every file in journal/, creatives/, essays/, and letters/ must start with YAML "
-        "front matter between lines containing only `---` (date: for journal, creatives, "
-        "essays; written_on: for letters).\n"
+        "front matter between lines containing only `---` (date and time for journal, "
+        "creatives and essays; written_on and time for letters).\n"
         "Write full prose in paragraphs — not a note about the piece, not a single sentence."
     )
     messages: list[dict] = [
@@ -915,7 +924,7 @@ def run(args: argparse.Namespace) -> None:
                     correction = (
                         "You have not written an essay yet. Every session requires one. "
                         "Call the Write tool NOW to create `essays/YYYY-MM-DD-slug.md` "
-                        "with YAML front matter (`date`, `title`, `topic`) and at least "
+                        "with YAML front matter (`date`, `time`, `title`, `topic`) and at least "
                         "800 words of full prose in paragraphs. Do not substitute a "
                         "creative piece for the essay, and do not describe it — write it."
                     )
@@ -941,8 +950,9 @@ def run(args: argparse.Namespace) -> None:
                     f"{details}\n"
                     "Rewrite each of those files with the Write tool, keeping the text, "
                     "so that it begins with a line containing only `---`, then the "
-                    "required field (`date: YYYY-MM-DD` for journal, creatives and "
-                    "essays; `written_on: YYYY-MM-DD` for letters), then a line "
+                    "required fields (`date: YYYY-MM-DD` and `time: \"HH:MM\"` for journal, "
+                    "creatives and essays; `written_on: YYYY-MM-DD` and `time: \"HH:MM\"` "
+                    "for letters), then a line "
                     "containing only `---`, and then the body. Do not describe the "
                     "fix — call Write."
                 )

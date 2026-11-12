@@ -32,17 +32,17 @@ defaults:
       path: ""
       type: essays
     values:
-      layout: post
+      layout: entry
   - scope:
       path: ""
       type: creatives
     values:
-      layout: post
+      layout: entry
   - scope:
       path: ""
       type: letters
     values:
-      layout: post
+      layout: entry
   - scope:
       path: ""
       type: pages

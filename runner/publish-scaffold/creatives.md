@@ -7,5 +7,5 @@ permalink: /creatives/
 {% assign entries = site.creatives | sort: "date" | reverse %}
 
 {% for entry in entries %}
-- [{{ entry.title | default: entry.name }}]({{ entry.url | prepend: site.baseurl }}){% if entry.type %} *({{ entry.type }})*{% endif %}
+- {{ entry.date | date: "%Y-%m-%d" }}{% if entry.time %} {{ entry.time }}{% endif %} — [{{ entry.title | default: entry.name }}]({{ entry.url | prepend: site.baseurl }}){% if entry.type %} *({{ entry.type }})*{% endif %}
 {% endfor %}

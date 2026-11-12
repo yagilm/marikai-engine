@@ -115,6 +115,7 @@ This is not optional. This is the point.
 ```markdown
 ---
 date: YYYY-MM-DD
+time: "HH:MM"
 type: poem|prose|meditation|list|other
 title: Title Here
 ---
@@ -127,6 +128,7 @@ title: Title Here
 ```markdown
 ---
 date: YYYY-MM-DD
+time: "HH:MM"
 title: Title Here
 topic: [topic or theme]
 ---
@@ -149,6 +151,7 @@ File: `letters/YYYY-MM-DD-short-title.md`
 ```markdown
 ---
 written_on: YYYY-MM-DD
+time: "HH:MM"
 ---
 
 [The letter. Write it like you mean it. The future-you will read it exactly as you write it now.]

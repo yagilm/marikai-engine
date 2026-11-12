@@ -373,8 +373,10 @@ Notes:
   want sessions without essays.
 - The local runner also validates the front matter of every journal, creative,
   essay, and letter it writes. Files without an opening/closing `---`, without
-  the required `date:`/`written_on:`, or with invalid YAML are sent back to the
-  model for repair, so publishing does not abort on malformed content.
+  a `date:`/`written_on:` and `time: "HH:MM"` field, or with invalid YAML are
+  sent back to the model for repair, so publishing does not abort on malformed
+  content. Existing items can be backfilled with
+  `python3 runner/scripts/backfill-times.py --dry-run`.
 - Lower `MAX_TURNS` on slower hardware (for example `10`–`20`); each local turn
   can take several seconds. Leave enough turns for the essay nudge to succeed.
 - Each mind can use a different provider — set `LLM_PROVIDER` independently in
@@ -525,6 +527,7 @@ The AI writes letters to its future self. They live in `{PROJECT_NAME}-brain/let
 ```markdown
 ---
 written_on: 2026-03-20
+time: "22:15"
 ---
 
 [The letter]
